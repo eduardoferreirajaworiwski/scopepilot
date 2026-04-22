@@ -43,9 +43,19 @@ class EvidenceStoreService:
             )
         )
 
-    def record_decision(self, *, actor: str, decision: str, rationale: str, state: dict, **refs) -> None:
+    def record_decision(
+        self,
+        *,
+        actor: str,
+        decision: str,
+        rationale: str,
+        state: dict,
+        stage: FlowStage = FlowStage.APPROVAL,
+        **refs,
+    ) -> None:
         self.repository.store_decision_snapshot(
             DecisionSnapshotCreate(
+                stage=stage,
                 actor=actor,
                 decision=decision,
                 rationale=rationale,
@@ -68,4 +78,3 @@ class EvidenceStoreService:
 
     def get_by_finding(self, finding_id: int) -> EvidenceStoreQueryResult:
         return self.repository.get_by_finding(finding_id)
-

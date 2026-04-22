@@ -24,7 +24,8 @@
             <label>Owner <input name="owner" required /></label>
             <label>Descrição <textarea name="description"></textarea></label>
             <label>Allowed domains (CSV) <input name="allowed_domains" placeholder="example.com,*.example.com" /></label>
-            <label>Forbidden keywords (CSV) <input name="forbidden_keywords" placeholder="admin,internal" /></label>
+            <label>Denied domains (CSV) <input name="denied_domains" placeholder="admin.example.com" /></label>
+            <label>Forbidden techniques (CSV) <input name="forbidden_techniques" placeholder="sqlmap,payload_injection" /></label>
             <button type="submit">Criar programa</button>
           </form>
         </article>
@@ -67,6 +68,7 @@
           <form id="approval-request-form">
             <label>Hypothesis ID <input name="hypothesis_id" type="number" required /></label>
             <label>Solicitado por <input name="requested_by" required /></label>
+            <label>Justificativa <textarea name="rationale" required></textarea></label>
             <button type="submit">Solicitar aprovação</button>
           </form>
           <hr />
@@ -79,6 +81,12 @@
               </select>
             </label>
             <label>Aprovador <input name="approver" required /></label>
+            <label>Papel do aprovador
+              <select name="approver_role">
+                <option value="analyst">analyst</option>
+                <option value="security_lead">security_lead</option>
+              </select>
+            </label>
             <label>Motivo <textarea name="reason" required></textarea></label>
             <button type="submit">Decidir aprovação</button>
           </form>
@@ -90,6 +98,11 @@
             <label>Hypothesis ID <input name="hypothesis_id" type="number" required /></label>
             <label>Solicitado por <input name="requested_by" required /></label>
             <label>Plano de ação <textarea name="action_plan" required></textarea></label>
+            <label>Técnica <input name="technique" value="manual_verification" required /></label>
+            <label>Requests/min <input name="request_rate_per_minute" type="number" min="1" value="1" required /></label>
+            <label>Targets tocados <input name="target_count" type="number" min="1" value="1" required /></label>
+            <label><input name="state_changing" type="checkbox" /> altera estado</label>
+            <label><input name="requires_authentication" type="checkbox" /> usa autenticação</label>
             <button type="submit">Solicitar execução</button>
           </form>
           <hr />
@@ -102,9 +115,10 @@
             <label>Execution ID <input name="execution_id" type="number" required /></label>
             <label>Ator <input name="actor" required /></label>
             <label>Resumo de saída <textarea name="output_summary" required></textarea></label>
-            <label>Evidência (texto) <textarea name="evidence_content"></textarea></label>
+            <label>Evidência (texto) <textarea name="evidence_content" required></textarea></label>
             <button type="submit">Concluir execução + gerar finding</button>
           </form>
+          <p>Concluir só funciona após despacho manual e com pelo menos uma evidência registrada.</p>
         </article>
 
         <article class="card">
@@ -131,4 +145,3 @@
     <script src="/static/app.js"></script>
   </body>
 </html>
-

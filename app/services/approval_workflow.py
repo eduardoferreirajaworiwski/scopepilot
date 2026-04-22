@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Approval, Hypothesis, Target
 from app.schemas.enums import ApprovalStatus, HypothesisStatus
+from app.schemas.evidence_store import FlowStage
+from app.schemas.enums import RequiredApprovalLevel
 from app.services.decision_log import DecisionLoggerService
 from app.services.evidence_store import EvidenceStoreService
 
@@ -20,6 +22,11 @@ class ApprovalGateResult:
 
 
 class ApprovalWorkflowService:
+    _APPROVAL_LEVEL_RANK = {
+        RequiredApprovalLevel.ANALYST.value: 1,
+        RequiredApprovalLevel.SECURITY_LEAD.value: 2,
+    }
+
     def __init__(
         self,
         db: Session,
@@ -117,23 +124,46 @@ class ApprovalWorkflowService:
             active.append(approval)
         return active
 
-    def approve(self, approval: Approval, *, approver: str, rationale: str) -> Approval:
+    def approve(
+        self,
+        approval: Approval,
+        *,
+        approver: str,
+        approver_role: RequiredApprovalLevel,
+        rationale: str,
+    ) -> Approval:
         return self.decide(
             approval,
             approver=approver,
+            approver_role=approver_role,
             status_value=ApprovalStatus.APPROVED.value,
             rationale=rationale,
         )
 
-    def reject(self, approval: Approval, *, approver: str, rationale: str) -> Approval:
+    def reject(
+        self,
+        approval: Approval,
+        *,
+        approver: str,
+        approver_role: RequiredApprovalLevel,
+        rationale: str,
+    ) -> Approval:
         return self.decide(
             approval,
             approver=approver,
+            approver_role=approver_role,
             status_value=ApprovalStatus.REJECTED.value,
             rationale=rationale,
         )
 
-    def decide(self, approval: Approval, approver: str, status_value: str, rationale: str) -> Approval:
+    def decide(
+        self,
+        approval: Approval,
+        approver: str,
+        approver_role: RequiredApprovalLevel,
+        status_value: str,
+        rationale: str,
+    ) -> Approval:
         if self.expire_if_needed(approval):
             self.db.commit()
             raise HTTPException(
@@ -154,7 +184,45 @@ class ApprovalWorkflowService:
                 detail="Hipótese vinculada à aprovação não encontrada.",
             )
 
+        if approval.requested_by == approver:
+            reason = "O solicitante nao pode decidir sua propria aprovacao."
+            self._record_blocked_decision(
+                approval=approval,
+                hypothesis=hypothesis,
+                actor=approver,
+                reason=reason,
+                metadata={
+                    "requested_by": approval.requested_by,
+                    "attempted_status": status_value,
+                },
+            )
+            self.db.commit()
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
+
+        required_level = hypothesis.required_approval_level
+        if not self._approval_level_allows(
+            approver_role=approver_role.value,
+            required_level=required_level,
+        ):
+            reason = (
+                "O papel do aprovador nao atende o nivel minimo exigido para esta hipotese."
+            )
+            self._record_blocked_decision(
+                approval=approval,
+                hypothesis=hypothesis,
+                actor=approver,
+                reason=reason,
+                metadata={
+                    "required_approval_level": required_level,
+                    "approver_role": approver_role.value,
+                    "attempted_status": status_value,
+                },
+            )
+            self.db.commit()
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
+
         approval.approver = approver
+        approval.approver_role = approver_role.value
         approval.status = status_value
         approval.decision_reason = rationale
         approval.decided_at = datetime.now(UTC)
@@ -176,6 +244,7 @@ class ApprovalWorkflowService:
             metadata={
                 "hypothesis_id": hypothesis.id,
                 "new_hypothesis_status": hypothesis.status,
+                "approver_role": approver_role.value,
                 "expires_at": approval.expires_at.isoformat() if approval.expires_at is not None else None,
             },
         )
@@ -188,9 +257,12 @@ class ApprovalWorkflowService:
             actor=approver,
             decision=decision,
             rationale=rationale,
+            stage=FlowStage.APPROVAL,
             state={
                 "status": approval.status,
                 "hypothesis_status": hypothesis.status,
+                "approver_role": approval.approver_role,
+                "required_approval_level": hypothesis.required_approval_level,
                 "decided_at": approval.decided_at,
             },
         )
@@ -289,9 +361,46 @@ class ApprovalWorkflowService:
                 actor="system",
                 decision=ApprovalStatus.EXPIRED.value,
                 rationale="Aprovacao expirada antes de decisao humana.",
+                stage=FlowStage.APPROVAL,
                 state={"status": ApprovalStatus.EXPIRED.value, "expires_at": expires_at},
             )
         return True
+
+    def _approval_level_allows(self, *, approver_role: str, required_level: str) -> bool:
+        return self._APPROVAL_LEVEL_RANK.get(approver_role, 0) >= self._APPROVAL_LEVEL_RANK.get(
+            required_level,
+            0,
+        )
+
+    def _record_blocked_decision(
+        self,
+        *,
+        approval: Approval,
+        hypothesis: Hypothesis,
+        actor: str,
+        reason: str,
+        metadata: dict,
+    ) -> None:
+        self.decision_logger.log(
+            event_type="approval_decision_blocked",
+            entity_type="approval",
+            entity_id=approval.id,
+            actor=actor,
+            decision="blocked",
+            reason=reason,
+            metadata={"hypothesis_id": hypothesis.id, **metadata},
+        )
+        self.evidence_store.record_decision(
+            program_id=hypothesis.program_id,
+            target_id=hypothesis.target_id,
+            hypothesis_id=hypothesis.id,
+            approval_id=approval.id,
+            actor=actor,
+            decision="blocked",
+            rationale=reason,
+            stage=FlowStage.APPROVAL,
+            state=metadata,
+        )
 
     def _normalize_datetime(self, value: datetime | None) -> datetime | None:
         if value is None:

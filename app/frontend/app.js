@@ -40,7 +40,8 @@ document.querySelector("#program-form").addEventListener("submit", async (event)
     owner: form.owner.value,
     scope_policy: {
       allowed_domains: csvToList(form.allowed_domains.value),
-      forbidden_keywords: csvToList(form.forbidden_keywords.value),
+      denied_domains: csvToList(form.denied_domains.value),
+      forbidden_techniques: csvToList(form.forbidden_techniques.value),
     },
   };
   try {
@@ -103,7 +104,10 @@ document.querySelector("#approval-request-form").addEventListener("submit", asyn
   event.preventDefault();
   const form = event.currentTarget;
   const hypothesisId = Number(form.hypothesis_id.value);
-  const payload = { requested_by: form.requested_by.value };
+  const payload = {
+    requested_by: form.requested_by.value,
+    rationale: form.rationale.value,
+  };
   try {
     render(
       await fetchJson(`/api/hypotheses/${hypothesisId}/approvals`, {
@@ -123,6 +127,7 @@ document.querySelector("#approval-decision-form").addEventListener("submit", asy
   const payload = {
     status: form.status.value,
     approver: form.approver.value,
+    approver_role: form.approver_role.value,
     reason: form.reason.value,
   };
   try {
@@ -144,6 +149,11 @@ document.querySelector("#execution-request-form").addEventListener("submit", asy
     hypothesis_id: Number(form.hypothesis_id.value),
     requested_by: form.requested_by.value,
     action_plan: form.action_plan.value,
+    technique: form.technique.value,
+    request_rate_per_minute: Number(form.request_rate_per_minute.value),
+    target_count: Number(form.target_count.value),
+    state_changing: form.state_changing.checked,
+    requires_authentication: form.requires_authentication.checked,
   };
   try {
     render(await fetchJson("/api/executions", { method: "POST", body: JSON.stringify(payload) }));
@@ -176,6 +186,11 @@ document.querySelector("#execution-complete-form").addEventListener("submit", as
       ? [{ evidence_type: "note", content: evidenceContent, artifact_uri: null }]
       : [],
   };
+
+  if (!payload.evidence.length) {
+    render({ error: "Ao menos uma evidência é obrigatória para concluir a execução." });
+    return;
+  }
 
   try {
     render(
@@ -249,4 +264,3 @@ document.querySelector("#load-audit").addEventListener("click", async () => {
     render(error);
   }
 });
-

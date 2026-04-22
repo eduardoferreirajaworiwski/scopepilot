@@ -45,6 +45,7 @@ class DecisionSnapshotCreate(BaseModel):
     approval_id: int | None = None
     execution_id: int | None = None
     finding_id: int | None = None
+    stage: FlowStage = FlowStage.APPROVAL
     actor: str = Field(min_length=2, max_length=120)
     decision: str = Field(min_length=2, max_length=80)
     rationale: str = Field(min_length=3)

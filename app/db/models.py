@@ -94,6 +94,7 @@ class Approval(Base):
     requested_by: Mapped[str] = mapped_column(String(120), nullable=False)
     request_rationale: Mapped[str] = mapped_column(Text, nullable=False, default="")
     approver: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    approver_role: Mapped[str | None] = mapped_column(String(40), nullable=True)
     status: Mapped[str] = mapped_column(
         String(30),
         nullable=False,

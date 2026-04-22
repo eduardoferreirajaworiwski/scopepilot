@@ -161,6 +161,7 @@ class EvidenceStoreRepositoryTests(unittest.TestCase):
                 target_id=self.refs["target_id"],
                 hypothesis_id=self.refs["hypothesis_id"],
                 approval_id=self.refs["approval_id"],
+                stage=FlowStage.APPROVAL,
                 actor="security-lead",
                 decision="approved",
                 rationale="Approved after reviewing sanitized request details.",
@@ -176,6 +177,29 @@ class EvidenceStoreRepositoryTests(unittest.TestCase):
         self.assertEqual(snapshot.snapshot_type, "decision")
         self.assertEqual(snapshot.payload_json["decision"], "approved")
         self.assertEqual(snapshot.payload_json["state"]["authorization"], "[REDACTED]")
+
+    def test_decision_snapshot_preserves_execution_stage(self) -> None:
+        self.repo.store_decision_snapshot(
+            DecisionSnapshotCreate(
+                program_id=self.refs["program_id"],
+                target_id=self.refs["target_id"],
+                hypothesis_id=self.refs["hypothesis_id"],
+                execution_id=self.refs["execution_id"],
+                stage=FlowStage.EXECUTION,
+                actor="operator",
+                decision="blocked",
+                rationale="Execution was blocked before dispatch.",
+                state={"status": "queued"},
+            )
+        )
+        self.db.commit()
+
+        result = self.repo.get_by_target(self.refs["target_id"])
+        execution_snapshot = next(
+            snapshot for snapshot in result.snapshots if snapshot.execution_id == self.refs["execution_id"]
+        )
+        self.assertEqual(execution_snapshot.stage, "execution")
+        self.assertEqual(execution_snapshot.snapshot_type, "decision")
 
     def test_store_raw_evidence_and_report_draft_separately(self) -> None:
         self.repo.store_snapshot(

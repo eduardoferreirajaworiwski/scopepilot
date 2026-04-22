@@ -79,6 +79,58 @@ evidence_agent = EvidenceReportAgent()
 report_agent = ReportAgent()
 
 
+def _audit_blocked_execution_action(
+    *,
+    evidence_store: EvidenceStoreService,
+    decision_logger: DecisionLoggerService,
+    actor: str,
+    program: Program,
+    target: Target,
+    hypothesis: Hypothesis,
+    payload: dict,
+    reason: str,
+    code: str,
+    event_type: str,
+    execution_id: int | None = None,
+    metadata: dict | None = None,
+) -> None:
+    evidence_store.record_request(
+        stage=FlowStage.EXECUTION,
+        program_id=program.id,
+        target_id=target.id,
+        hypothesis_id=hypothesis.id,
+        execution_id=execution_id,
+        actor=actor,
+        payload=payload,
+    )
+    evidence_store.record_decision(
+        stage=FlowStage.EXECUTION,
+        program_id=program.id,
+        target_id=target.id,
+        hypothesis_id=hypothesis.id,
+        execution_id=execution_id,
+        actor=actor,
+        decision="blocked",
+        rationale=reason,
+        state={"code": code, **(metadata or {})},
+    )
+    decision_logger.log(
+        event_type=event_type,
+        entity_type="execution",
+        entity_id=execution_id,
+        actor=actor,
+        decision="blocked",
+        reason=reason,
+        metadata={
+            "program_id": program.id,
+            "target_id": target.id,
+            "hypothesis_id": hypothesis.id,
+            "code": code,
+            **(metadata or {}),
+        },
+    )
+
+
 def _get_program_or_404(db: Session, program_id: int) -> Program:
     program = db.get(Program, program_id)
     if program is None:
@@ -564,6 +616,7 @@ def approve_approval(
     updated = workflow.approve(
         approval=approval,
         approver=payload.approver,
+        approver_role=payload.approver_role,
         rationale=payload.rationale,
     )
     db.flush()
@@ -604,6 +657,7 @@ def reject_approval(
     updated = workflow.reject(
         approval=approval,
         approver=payload.approver,
+        approver_role=payload.approver_role,
         rationale=payload.rationale,
     )
     db.flush()
@@ -645,12 +699,14 @@ def decide_approval(
         updated = workflow.approve(
             approval=approval,
             approver=payload.approver,
+            approver_role=payload.approver_role,
             rationale=payload.rationale,
         )
     else:
         updated = workflow.reject(
             approval=approval,
             approver=payload.approver,
+            approver_role=payload.approver_role,
             rationale=payload.rationale,
         )
     db.flush()
@@ -684,6 +740,8 @@ def request_execution(payload: ExecutionRequest, db: Session = Depends(get_db)) 
     target = _get_target_or_404(db, hypothesis.target_id)
     program = _get_program_or_404(db, hypothesis.program_id)
     evidence_store = EvidenceStoreService.for_db(db)
+    decision_logger = DecisionLoggerService(db)
+    serialized_payload = payload.model_dump(mode="json")
     scope_policy = ProgramPolicy.model_validate(program.scope_policy or {})
     target_scope_result = scope_guard_agent.validate_target(
         scope_policy=scope_policy,
@@ -691,6 +749,20 @@ def request_execution(payload: ExecutionRequest, db: Session = Depends(get_db)) 
         target_type=target.target_type,
     )
     if not target_scope_result.in_scope:
+        _audit_blocked_execution_action(
+            evidence_store=evidence_store,
+            decision_logger=decision_logger,
+            actor=payload.requested_by,
+            program=program,
+            target=target,
+            hypothesis=hypothesis,
+            payload=serialized_payload,
+            reason=f"Execucao negada por escopo. Motivo: {target_scope_result.message}",
+            code=target_scope_result.code,
+            event_type="execution_request_blocked",
+            metadata={"matched_rule": target_scope_result.matched_rule},
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Execucao negada por escopo. Motivo: {target_scope_result.message}",
@@ -708,13 +780,26 @@ def request_execution(payload: ExecutionRequest, db: Session = Depends(get_db)) 
     )
     action_block_result = scope_guard_agent.block_prohibited_action(scope_policy, proposed_action)
     if action_block_result.blocked:
+        _audit_blocked_execution_action(
+            evidence_store=evidence_store,
+            decision_logger=decision_logger,
+            actor=payload.requested_by,
+            program=program,
+            target=target,
+            hypothesis=hypothesis,
+            payload=serialized_payload,
+            reason=action_block_result.message,
+            code=action_block_result.code,
+            event_type="execution_request_blocked",
+            metadata={"reasons": action_block_result.reasons},
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=action_block_result.message,
         )
 
     manual_approval_result = scope_guard_agent.requires_manual_approval(scope_policy, proposed_action)
-    decision_logger = DecisionLoggerService(db)
     workflow = ApprovalWorkflowService(db, decision_logger)
     gate_result = workflow.evaluate_execution_gate(hypothesis)
     if gate_result.commit_required:
@@ -723,6 +808,23 @@ def request_execution(payload: ExecutionRequest, db: Session = Depends(get_db)) 
         detail = gate_result.message
         if manual_approval_result.requires_manual_approval and manual_approval_result.message not in detail:
             detail = f"{manual_approval_result.message} {detail}"
+        _audit_blocked_execution_action(
+            evidence_store=evidence_store,
+            decision_logger=decision_logger,
+            actor=payload.requested_by,
+            program=program,
+            target=target,
+            hypothesis=hypothesis,
+            payload=serialized_payload,
+            reason=detail,
+            code="approval_gate.blocked",
+            event_type="execution_request_blocked",
+            metadata={
+                "manual_approval_required": manual_approval_result.requires_manual_approval,
+                "manual_approval_reasons": manual_approval_result.reasons,
+            },
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=detail,
@@ -747,7 +849,7 @@ def request_execution(payload: ExecutionRequest, db: Session = Depends(get_db)) 
         approval_id=latest_approval.id if latest_approval is not None else None,
         execution_id=execution.id,
         actor=payload.requested_by,
-        payload=payload.model_dump(mode="json"),
+        payload=serialized_payload,
     )
     evidence_store.record_response(
         stage=FlowStage.EXECUTION,
@@ -837,29 +939,75 @@ def complete_execution(
     db: Session = Depends(get_db),
 ) -> ExecutionCompleteResponse:
     execution = _get_execution_or_404(db, execution_id)
+    evidence_store = EvidenceStoreService.for_db(db)
+    decision_logger = DecisionLoggerService(db)
+    hypothesis = _get_hypothesis_or_404(db, execution.hypothesis_id)
+    target = _get_target_or_404(db, hypothesis.target_id)
+    program = _get_program_or_404(db, hypothesis.program_id)
+    serialized_payload = payload.model_dump(mode="json", exclude_none=True)
+
     if execution.status == ExecutionStatus.BLOCKED.value:
+        _audit_blocked_execution_action(
+            evidence_store=evidence_store,
+            decision_logger=decision_logger,
+            actor=payload.actor,
+            program=program,
+            target=target,
+            hypothesis=hypothesis,
+            execution_id=execution.id,
+            payload=serialized_payload,
+            reason="Execução bloqueada não pode ser concluída.",
+            code="execution.blocked_status",
+            event_type="execution_completion_blocked",
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Execução bloqueada não pode ser concluída.",
         )
     if execution.status == ExecutionStatus.COMPLETED.value:
+        _audit_blocked_execution_action(
+            evidence_store=evidence_store,
+            decision_logger=decision_logger,
+            actor=payload.actor,
+            program=program,
+            target=target,
+            hypothesis=hypothesis,
+            execution_id=execution.id,
+            payload=serialized_payload,
+            reason="Execução já foi concluída anteriormente.",
+            code="execution.already_completed",
+            event_type="execution_completion_blocked",
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Execução já foi concluída anteriormente.",
         )
+    if execution.status != ExecutionStatus.RUNNING.value:
+        _audit_blocked_execution_action(
+            evidence_store=evidence_store,
+            decision_logger=decision_logger,
+            actor=payload.actor,
+            program=program,
+            target=target,
+            hypothesis=hypothesis,
+            execution_id=execution.id,
+            payload=serialized_payload,
+            reason="Execução deve ser despachada manualmente e entrar em estado running antes da conclusão.",
+            code="execution.invalid_status_transition",
+            event_type="execution_completion_blocked",
+            metadata={"current_status": execution.status},
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Execução deve ser despachada manualmente antes da conclusão.",
+        )
 
-    if execution.status == ExecutionStatus.QUEUED.value:
-        execution.status = ExecutionStatus.RUNNING.value
-        execution.started_at = datetime.now(UTC)
-
-    evidence_store = EvidenceStoreService.for_db(db)
     execution.status = ExecutionStatus.COMPLETED.value
     execution.completed_at = datetime.now(UTC)
     execution.output_summary = payload.output_summary
-
-    hypothesis = _get_hypothesis_or_404(db, execution.hypothesis_id)
-    target = _get_target_or_404(db, hypothesis.target_id)
-    program = _get_program_or_404(db, hypothesis.program_id)
 
     finding_data = (
         payload.finding.model_dump() if payload.finding else evidence_agent.build_finding(hypothesis, execution)
@@ -887,7 +1035,7 @@ def complete_execution(
         hypothesis_id=hypothesis.id,
         execution_id=execution.id,
         actor=payload.actor,
-        payload=payload.model_dump(mode="json", exclude_none=True),
+        payload=serialized_payload,
     )
 
     evidence_count = 0
@@ -953,7 +1101,6 @@ def complete_execution(
 
     hypothesis.status = HypothesisStatus.EXECUTED.value
 
-    decision_logger = DecisionLoggerService(db)
     decision_logger.log(
         event_type="execution_completed",
         entity_type="execution",

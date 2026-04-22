@@ -132,7 +132,7 @@ class SqlAlchemyEvidenceStoreRepository:
                 approval_id=payload.approval_id,
                 execution_id=payload.execution_id,
                 finding_id=payload.finding_id,
-                stage="approval",
+                stage=payload.stage,
                 snapshot_type="decision",
                 actor=payload.actor,
                 payload={
@@ -310,4 +310,3 @@ class SqlAlchemyEvidenceStoreRepository:
             findings=[FindingRead.model_validate(item) for item in findings],
             report_drafts=report_drafts,
         )
-

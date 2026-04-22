@@ -8,6 +8,8 @@ Plataforma de apoio para programas autorizados de bug bounty com fluxo **human-i
 - Toda decisão operacional é registrada.
 - Fluxo separado em hipótese, aprovação, execução e evidência.
 - Sem automação agressiva/destrutiva no MVP.
+- Aprovação exige revisor humano distinto e compatível com o nível exigido pela hipótese.
+- Execução só pode ser concluída após despacho manual e com evidência registrada.
 
 ## Arquitetura (FastAPI + SQLite + Pydantic)
 - **Backend**: FastAPI.
@@ -45,8 +47,10 @@ Detalhamento do Report Agent: [docs/report_agent.md](/home/eduardo/projects/scop
 2. `target` -> validação Scope Guard.
 3. `hypothesis` -> criada manualmente ou assistida.
 4. `approval request` -> solicitação humana rastreável com `pending`, `approved`, `rejected` ou `expired`.
-5. `execution` -> somente após decisão humana `approved` válida e não expirada.
-6. `finding` -> gerado com base em execução e evidências.
+5. `execution request` -> somente após decisão humana `approved` válida, não expirada e emitida por papel compatível.
+6. `dispatch` -> execução sai da fila apenas por ação humana explícita.
+7. `completion` -> conclusão exige execução em `running` e ao menos uma evidência.
+8. `finding` -> gerado com base em execução aprovada e evidências registradas.
 
 ## Estrutura do projeto
 ```text
@@ -101,6 +105,8 @@ OpenAPI: `http://127.0.0.1:8000/docs`
 - O adapter de recon é mock e usa somente lógica segura/passiva.
 - Regras de escopo e lista de termos proibidos devem ser endurecidas antes de produção.
 - A execução depende formalmente de uma aprovação humana registrada e válida.
+- O solicitante não pode aprovar a própria execução e o papel do aprovador deve atender o `required_approval_level`.
+- Bloqueios de execução e de decisão também entram na trilha de auditoria.
 - O Evidence Store sanitiza request/response e nunca deve persistir segredos.
 - Evidência bruta e narrativa gerada por IA são armazenadas separadamente.
 - O Report Agent usa templates editáveis e marca explicitamente evidência versus inferência.

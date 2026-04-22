@@ -110,6 +110,7 @@ ApprovalRequestCreate = ApprovalRequest
 
 class ApprovalDecision(BaseModel):
     approver: str = Field(min_length=2, max_length=120)
+    approver_role: RequiredApprovalLevel
     rationale: str = Field(
         min_length=3,
         validation_alias=AliasChoices("rationale", "reason"),
@@ -126,6 +127,7 @@ class ApprovalRead(ORMModel):
     requested_by: str
     request_rationale: str
     approver: str | None
+    approver_role: RequiredApprovalLevel | None
     status: ApprovalStatus
     decision_reason: str | None
     created_at: datetime
@@ -164,7 +166,7 @@ class FindingInput(BaseModel):
 class ExecutionCompleteRequest(BaseModel):
     actor: str = Field(min_length=2, max_length=120)
     output_summary: str = Field(min_length=5)
-    evidence: list[EvidenceInput] = Field(default_factory=list)
+    evidence: list[EvidenceInput] = Field(default_factory=list, min_length=1)
     finding: FindingInput | None = None
 
 
