@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bug Bounty Copilot</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="hero">
+        <h1>Bug Bounty Copilot</h1>
+        <p>
+          Fluxo human-in-the-loop para programas autorizados com validação de escopo,
+          aprovação obrigatória e trilha de auditoria.
+        </p>
+      </header>
+
+      <section class="grid">
+        <article class="card">
+          <h2>1) Programa</h2>
+          <form id="program-form">
+            <label>Nome <input name="name" required /></label>
+            <label>Owner <input name="owner" required /></label>
+            <label>Descrição <textarea name="description"></textarea></label>
+            <label>Allowed domains (CSV) <input name="allowed_domains" placeholder="example.com,*.example.com" /></label>
+            <label>Forbidden keywords (CSV) <input name="forbidden_keywords" placeholder="admin,internal" /></label>
+            <button type="submit">Criar programa</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h2>2) Target</h2>
+          <form id="target-form">
+            <label>Program ID <input name="program_id" type="number" required /></label>
+            <label>Target <input name="identifier" required /></label>
+            <label>Tipo <input name="target_type" value="domain" required /></label>
+            <label>Criado por <input name="created_by" required /></label>
+            <button type="submit">Cadastrar target</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h2>3) Recon</h2>
+          <form id="recon-form">
+            <label>Target ID <input name="target_id" type="number" required /></label>
+            <label>Analista <input name="analyst" required /></label>
+            <button type="submit">Executar recon passivo</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h2>4) Hipótese</h2>
+          <form id="hypothesis-form">
+            <label>Target ID <input name="target_id" type="number" required /></label>
+            <label>Criado por <input name="created_by" required /></label>
+            <label>Título (opcional) <input name="title" /></label>
+            <label>Descrição (opcional) <textarea name="description"></textarea></label>
+            <label>Severidade <input name="severity" value="medium" /></label>
+            <label>Recon Record ID (opcional) <input name="recon_record_id" type="number" /></label>
+            <button type="submit">Criar hipótese</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h2>5) Aprovação</h2>
+          <form id="approval-request-form">
+            <label>Hypothesis ID <input name="hypothesis_id" type="number" required /></label>
+            <label>Solicitado por <input name="requested_by" required /></label>
+            <button type="submit">Solicitar aprovação</button>
+          </form>
+          <hr />
+          <form id="approval-decision-form">
+            <label>Approval ID <input name="approval_id" type="number" required /></label>
+            <label>Status
+              <select name="status">
+                <option value="approved">approved</option>
+                <option value="rejected">rejected</option>
+              </select>
+            </label>
+            <label>Aprovador <input name="approver" required /></label>
+            <label>Motivo <textarea name="reason" required></textarea></label>
+            <button type="submit">Decidir aprovação</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h2>6) Execução</h2>
+          <form id="execution-request-form">
+            <label>Hypothesis ID <input name="hypothesis_id" type="number" required /></label>
+            <label>Solicitado por <input name="requested_by" required /></label>
+            <label>Plano de ação <textarea name="action_plan" required></textarea></label>
+            <button type="submit">Solicitar execução</button>
+          </form>
+          <hr />
+          <form id="execution-dispatch-form">
+            <label>Operador <input name="operator" required /></label>
+            <button type="submit">Despachar próximo da fila</button>
+          </form>
+          <hr />
+          <form id="execution-complete-form">
+            <label>Execution ID <input name="execution_id" type="number" required /></label>
+            <label>Ator <input name="actor" required /></label>
+            <label>Resumo de saída <textarea name="output_summary" required></textarea></label>
+            <label>Evidência (texto) <textarea name="evidence_content"></textarea></label>
+            <button type="submit">Concluir execução + gerar finding</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h2>Consulta</h2>
+          <div class="actions">
+            <button id="load-programs">Programas</button>
+            <button id="load-targets">Targets (Program ID)</button>
+            <button id="load-hypotheses">Hipóteses</button>
+            <button id="load-approvals">Aprovações</button>
+            <button id="load-executions">Execuções</button>
+            <button id="load-findings">Findings</button>
+            <button id="load-audit">Auditoria</button>
+          </div>
+          <label>Program ID para targets <input id="program-id-query" type="number" /></label>
+        </article>
+      </section>
+
+      <section class="card output">
+        <h2>Saída</h2>
+        <pre id="output">{}</pre>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
+
