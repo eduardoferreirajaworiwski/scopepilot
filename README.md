@@ -15,6 +15,7 @@ Plataforma de apoio para programas autorizados de bug bounty com fluxo **human-i
 - **Contratos**: Pydantic.
 - **Observabilidade**: logging estruturado em JSON.
 - **Evidence Store**: snapshots sanitizados de request/response/decision, evidência bruta sanitizada e drafts narrativos separados.
+- **Report Agent**: geração determinística offline de drafts profissionais com export em Markdown e JSON.
 - **Fila**: fila simples in-memory para despacho manual de execuções.
 - **Adapters**: camada dedicada para ferramentas externas (mock no MVP).
 - **Agentes com responsabilidade isolada**:
@@ -26,6 +27,7 @@ Plataforma de apoio para programas autorizados de bug bounty com fluxo **human-i
 
 Detalhamento da arquitetura: [docs/architecture.md](/home/eduardo/projects/scopepilot/docs/architecture.md)
 Detalhamento do Evidence Store: [docs/evidence_store.md](/home/eduardo/projects/scopepilot/docs/evidence_store.md)
+Detalhamento do Report Agent: [docs/report_agent.md](/home/eduardo/projects/scopepilot/docs/report_agent.md)
 
 ## Modelo de dados do MVP
 - `Program`: programa autorizado e política de escopo.
@@ -101,4 +103,5 @@ OpenAPI: `http://127.0.0.1:8000/docs`
 - A execução depende formalmente de uma aprovação humana registrada e válida.
 - O Evidence Store sanitiza request/response e nunca deve persistir segredos.
 - Evidência bruta e narrativa gerada por IA são armazenadas separadamente.
+- O Report Agent usa templates editáveis e marca explicitamente evidência versus inferência.
 - Recomenda-se autenticação/autorização e assinatura de decisões para ambiente real.

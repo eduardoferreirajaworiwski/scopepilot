@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.agents.evidence_report import EvidenceReportAgent
 from app.agents.hypothesis import HypothesisAgent
 from app.agents.recon_analyst import ReconAnalystAgent
+from app.agents.report_agent import ReportAgent
 from app.agents.scope_guard import ScopeGuardAgent
 from app.api.deps import get_db
 from app.db.models import (
@@ -55,6 +56,14 @@ from app.schemas.hypothesis_engine import (
     HypothesisEvidenceInput,
     HypothesisProgramInput,
 )
+from app.schemas.report_agent import (
+    ReportAgentInput,
+    ReportEvidenceInput,
+    ReportFindingInput,
+    ReportImpactInput,
+    ReportProgramContextInput,
+    ReportStepInput,
+)
 from app.schemas.scope_guard import ProgramPolicy, ProposedAction
 from app.services.approval_workflow import ApprovalWorkflowService
 from app.services.decision_log import DecisionLoggerService
@@ -67,6 +76,7 @@ scope_guard_agent = ScopeGuardAgent()
 recon_agent = ReconAnalystAgent()
 hypothesis_agent = HypothesisAgent()
 evidence_agent = EvidenceReportAgent()
+report_agent = ReportAgent()
 
 
 def _get_program_or_404(db: Session, program_id: int) -> Program:
@@ -182,6 +192,72 @@ def _build_hypothesis_engine_input(
             name=program.name,
             owner=program.owner,
             scope_summary=program.description or None,
+        ),
+    )
+
+
+def _build_report_agent_input(
+    *,
+    program: Program,
+    target: Target,
+    hypothesis: Hypothesis,
+    execution: Execution,
+    finding: Finding,
+    execution_payload: ExecutionCompleteRequest,
+) -> ReportAgentInput:
+    evidence_inputs = [
+        ReportEvidenceInput(
+            label=f"Evidence {index}",
+            observation=item.content,
+            source=item.evidence_type,
+            artifact_uri=item.artifact_uri,
+        )
+        for index, item in enumerate(execution_payload.evidence, start=1)
+    ]
+    if not evidence_inputs:
+        evidence_inputs.append(
+            ReportEvidenceInput(
+                label="Execution Summary",
+                observation=execution.output_summary or "No execution summary was captured.",
+                source="execution_summary",
+            )
+        )
+
+    steps = [
+        ReportStepInput(
+            order=1,
+            action=execution.action_plan,
+            expected_result=execution.output_summary or "Observe the behavior described in the execution summary.",
+            evidence_labels=[item.label for item in evidence_inputs],
+        )
+    ]
+
+    return ReportAgentInput(
+        finding=ReportFindingInput(
+            finding_id=finding.id,
+            title=finding.title,
+            severity=finding.severity,
+            asset_identifier=target.identifier,
+            description=finding.description,
+        ),
+        evidence=evidence_inputs,
+        impact=ReportImpactInput(
+            confirmed_impact=finding.description,
+            business_context=f"Program '{program.name}' target '{target.identifier}'.",
+            analyst_inference=(
+                f"Hypothesis context: {hypothesis.title}. "
+                "Any analyst interpretation should be confirmed during human review."
+            ),
+        ),
+        steps=steps,
+        program_context=ReportProgramContextInput(
+            program_id=program.id,
+            name=program.name,
+            policy_summary=program.description or None,
+        ),
+        remediation_notes_hint=(
+            "Review the affected control boundary, restrict the demonstrated behavior, "
+            "and re-test with the same bounded evidence path."
         ),
     )
 
@@ -830,11 +906,15 @@ def complete_execution(
         )
         evidence_count += 1
 
-    report_draft = evidence_agent.build_report_draft(
-        hypothesis,
-        execution,
-        finding,
-        evidence_count=evidence_count,
+    report_draft = report_agent.generate(
+        _build_report_agent_input(
+            program=program,
+            target=target,
+            hypothesis=hypothesis,
+            execution=execution,
+            finding=finding,
+            execution_payload=payload,
+        )
     )
     evidence_store.store_report_draft(
         ReportDraftCreate(
@@ -843,10 +923,10 @@ def complete_execution(
             hypothesis_id=hypothesis.id,
             execution_id=execution.id,
             finding_id=finding.id,
-            title=report_draft["title"],
-            narrative=report_draft["narrative"],
-            generated_by=report_draft["generated_by"],
-            status=report_draft["status"],
+            title=report_draft.title,
+            narrative=report_draft.markdown_export,
+            generated_by="report_agent_offline",
+            status="draft",
         )
     )
 
@@ -868,7 +948,7 @@ def complete_execution(
         execution_id=execution.id,
         finding_id=finding.id,
         actor=payload.actor,
-        payload=report_draft,
+        payload=report_draft.model_dump(mode="json"),
     )
 
     hypothesis.status = HypothesisStatus.EXECUTED.value
