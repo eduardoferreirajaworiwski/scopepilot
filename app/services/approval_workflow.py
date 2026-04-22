@@ -1,26 +1,50 @@
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Approval, Hypothesis
+from app.db.models import Approval, Hypothesis, Target
 from app.schemas.enums import ApprovalStatus, HypothesisStatus
 from app.services.decision_log import DecisionLoggerService
+from app.services.evidence_store import EvidenceStoreService
+
+
+@dataclass
+class ApprovalGateResult:
+    allowed: bool
+    message: str
+    approval: Approval | None = None
+    commit_required: bool = False
 
 
 class ApprovalWorkflowService:
-    def __init__(self, db: Session, decision_logger: DecisionLoggerService) -> None:
+    def __init__(
+        self,
+        db: Session,
+        decision_logger: DecisionLoggerService,
+        evidence_store: EvidenceStoreService | None = None,
+    ) -> None:
         self.db = db
         self.decision_logger = decision_logger
+        self.evidence_store = evidence_store or EvidenceStoreService.for_db(db)
 
-    def request(self, hypothesis: Hypothesis, requested_by: str) -> Approval:
+    def request(
+        self,
+        hypothesis: Hypothesis,
+        *,
+        requested_by: str,
+        rationale: str,
+        expires_at: datetime | None = None,
+    ) -> Approval:
         if hypothesis.status == HypothesisStatus.EXECUTED.value:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Hipótese já executada; nova aprovação não é permitida.",
             )
 
+        self.expire_pending_for_hypothesis(hypothesis)
         pending = self.db.scalar(
             select(Approval).where(
                 Approval.hypothesis_id == hypothesis.id,
@@ -36,11 +60,14 @@ class ApprovalWorkflowService:
         approval = Approval(
             hypothesis_id=hypothesis.id,
             requested_by=requested_by,
+            request_rationale=rationale,
             status=ApprovalStatus.PENDING.value,
+            expires_at=expires_at,
         )
         hypothesis.status = HypothesisStatus.PENDING_APPROVAL.value
 
         self.db.add(approval)
+        self.db.flush()
         self.decision_logger.log(
             event_type="approval_requested",
             entity_type="hypothesis",
@@ -53,11 +80,67 @@ class ApprovalWorkflowService:
                 "required_approval_level": hypothesis.required_approval_level,
                 "confidence": hypothesis.confidence,
                 "suggested_next_step": hypothesis.suggested_next_step,
+                "request_rationale": rationale,
+                "expires_at": expires_at.isoformat() if expires_at is not None else None,
+            },
+        )
+        target = self.db.get(Target, hypothesis.target_id)
+        self.evidence_store.record_decision(
+            program_id=hypothesis.program_id,
+            target_id=target.id if target is not None else None,
+            hypothesis_id=hypothesis.id,
+            approval_id=approval.id,
+            actor=requested_by,
+            decision=ApprovalStatus.PENDING.value,
+            rationale=rationale,
+            state={
+                "status": ApprovalStatus.PENDING.value,
+                "required_approval_level": hypothesis.required_approval_level,
+                "confidence": hypothesis.confidence,
+                "expires_at": expires_at,
             },
         )
         return approval
 
-    def decide(self, approval: Approval, approver: str, status_value: str, reason: str) -> Approval:
+    def list_pending(self) -> list[Approval]:
+        approvals = list(
+            self.db.scalars(
+                select(Approval)
+                .where(Approval.status == ApprovalStatus.PENDING.value)
+                .order_by(desc(Approval.created_at))
+            )
+        )
+        active: list[Approval] = []
+        for approval in approvals:
+            if self.expire_if_needed(approval):
+                continue
+            active.append(approval)
+        return active
+
+    def approve(self, approval: Approval, *, approver: str, rationale: str) -> Approval:
+        return self.decide(
+            approval,
+            approver=approver,
+            status_value=ApprovalStatus.APPROVED.value,
+            rationale=rationale,
+        )
+
+    def reject(self, approval: Approval, *, approver: str, rationale: str) -> Approval:
+        return self.decide(
+            approval,
+            approver=approver,
+            status_value=ApprovalStatus.REJECTED.value,
+            rationale=rationale,
+        )
+
+    def decide(self, approval: Approval, approver: str, status_value: str, rationale: str) -> Approval:
+        if self.expire_if_needed(approval):
+            self.db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Aprovação expirada; solicite uma nova revisão humana.",
+            )
+
         if approval.status != ApprovalStatus.PENDING.value:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -73,7 +156,7 @@ class ApprovalWorkflowService:
 
         approval.approver = approver
         approval.status = status_value
-        approval.decision_reason = reason
+        approval.decision_reason = rationale
         approval.decided_at = datetime.now(UTC)
 
         if status_value == ApprovalStatus.APPROVED.value:
@@ -89,10 +172,130 @@ class ApprovalWorkflowService:
             entity_id=approval.id,
             actor=approver,
             decision=decision,
-            reason=reason,
+            reason=rationale,
             metadata={
                 "hypothesis_id": hypothesis.id,
                 "new_hypothesis_status": hypothesis.status,
+                "expires_at": approval.expires_at.isoformat() if approval.expires_at is not None else None,
+            },
+        )
+        target = self.db.get(Target, hypothesis.target_id)
+        self.evidence_store.record_decision(
+            program_id=hypothesis.program_id,
+            target_id=target.id if target is not None else None,
+            hypothesis_id=hypothesis.id,
+            approval_id=approval.id,
+            actor=approver,
+            decision=decision,
+            rationale=rationale,
+            state={
+                "status": approval.status,
+                "hypothesis_status": hypothesis.status,
+                "decided_at": approval.decided_at,
             },
         )
         return approval
+
+    def evaluate_execution_gate(self, hypothesis: Hypothesis) -> ApprovalGateResult:
+        latest_approval = self.db.scalar(
+            select(Approval)
+            .where(Approval.hypothesis_id == hypothesis.id)
+            .order_by(desc(Approval.created_at))
+        )
+        if latest_approval is None:
+            return ApprovalGateResult(
+                allowed=False,
+                message="Execucao bloqueada: nenhuma aprovacao humana foi registrada para esta hipotese.",
+            )
+
+        commit_required = self.expire_if_needed(latest_approval)
+        current_status = latest_approval.status
+        if current_status == ApprovalStatus.PENDING.value:
+            return ApprovalGateResult(
+                allowed=False,
+                message="Execucao bloqueada: a solicitacao de aprovacao ainda esta pendente.",
+                commit_required=commit_required,
+            )
+        if current_status == ApprovalStatus.REJECTED.value:
+            return ApprovalGateResult(
+                allowed=False,
+                message="Execucao bloqueada: a ultima decisao humana rejeitou esta hipotese.",
+                commit_required=commit_required,
+            )
+        if current_status == ApprovalStatus.EXPIRED.value:
+            return ApprovalGateResult(
+                allowed=False,
+                message="Execucao bloqueada: a aprovacao humana expirou antes da execucao.",
+                commit_required=commit_required,
+            )
+        if hypothesis.status != HypothesisStatus.APPROVED.value:
+            return ApprovalGateResult(
+                allowed=False,
+                message="Execucao bloqueada: o estado da hipotese nao esta aprovado.",
+                commit_required=commit_required,
+            )
+
+        return ApprovalGateResult(
+            allowed=True,
+            message="Aprovacao humana valida encontrada para execucao.",
+            approval=latest_approval,
+            commit_required=commit_required,
+        )
+
+    def expire_pending_for_hypothesis(self, hypothesis: Hypothesis) -> None:
+        pending = list(
+            self.db.scalars(
+                select(Approval).where(
+                    Approval.hypothesis_id == hypothesis.id,
+                    Approval.status == ApprovalStatus.PENDING.value,
+                )
+            )
+        )
+        for approval in pending:
+            self.expire_if_needed(approval)
+
+    def expire_if_needed(self, approval: Approval) -> bool:
+        if approval.status != ApprovalStatus.PENDING.value:
+            return False
+        expires_at = self._normalize_datetime(approval.expires_at)
+        if expires_at is None or expires_at > datetime.now(UTC):
+            return False
+
+        hypothesis = self.db.get(Hypothesis, approval.hypothesis_id)
+        approval.status = ApprovalStatus.EXPIRED.value
+        approval.decision_reason = "Aprovacao expirada antes de uma decisao humana."
+        approval.decided_at = datetime.now(UTC)
+        if hypothesis is not None and hypothesis.status == HypothesisStatus.PENDING_APPROVAL.value:
+            hypothesis.status = HypothesisStatus.DRAFT.value
+
+        self.decision_logger.log(
+            event_type="approval_expired",
+            entity_type="approval",
+            entity_id=approval.id,
+            actor="system",
+            decision="expired",
+            reason="Aprovacao expirada antes de decisao humana.",
+            metadata={
+                "hypothesis_id": approval.hypothesis_id,
+                "expires_at": expires_at.isoformat() if expires_at is not None else None,
+            },
+        )
+        if hypothesis is not None:
+            self.evidence_store.record_decision(
+                program_id=hypothesis.program_id,
+                target_id=hypothesis.target_id,
+                hypothesis_id=approval.hypothesis_id,
+                approval_id=approval.id,
+                actor="system",
+                decision=ApprovalStatus.EXPIRED.value,
+                rationale="Aprovacao expirada antes de decisao humana.",
+                state={"status": ApprovalStatus.EXPIRED.value, "expires_at": expires_at},
+            )
+        return True
+
+    def _normalize_datetime(self, value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)

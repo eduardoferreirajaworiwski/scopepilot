@@ -12,7 +12,6 @@ from app.api.deps import get_db
 from app.db.models import (
     Approval,
     DecisionLog,
-    Evidence,
     Execution,
     Finding,
     Hypothesis,
@@ -24,7 +23,8 @@ from app.schemas.enums import ApprovalStatus, ExecutionStatus, HypothesisStatus
 from app.schemas.models import (
     ApprovalDecision,
     ApprovalRead,
-    ApprovalRequestCreate,
+    ApprovalRequest,
+    ApprovalStatusUpdate,
     DecisionLogRead,
     ExecutionCompleteRequest,
     ExecutionCompleteResponse,
@@ -42,6 +42,12 @@ from app.schemas.models import (
     TargetCreate,
     TargetRead,
 )
+from app.schemas.evidence_store import (
+    EvidenceRecordCreate,
+    EvidenceStoreQueryResult,
+    FlowStage,
+    ReportDraftCreate,
+)
 from app.schemas.hypothesis_engine import (
     HypothesisAssetInput,
     HypothesisContextInput,
@@ -52,6 +58,7 @@ from app.schemas.hypothesis_engine import (
 from app.schemas.scope_guard import ProgramPolicy, ProposedAction
 from app.services.approval_workflow import ApprovalWorkflowService
 from app.services.decision_log import DecisionLoggerService
+from app.services.evidence_store import EvidenceStoreService
 from app.services.simple_queue import execution_queue
 
 router = APIRouter(prefix="/api", tags=["Bug Bounty Copilot"])
@@ -95,6 +102,13 @@ def _get_execution_or_404(db: Session, execution_id: int) -> Execution:
     if execution is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Execução não encontrada.")
     return execution
+
+
+def _get_finding_or_404(db: Session, finding_id: int) -> Finding:
+    finding = db.get(Finding, finding_id)
+    if finding is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding não encontrado.")
+    return finding
 
 
 def _map_observation_type(observation: str) -> str:
@@ -337,6 +351,7 @@ def create_hypothesis(payload: HypothesisCreate, db: Session = Depends(get_db)) 
     generated = hypothesis_agent.generate(engine_input)
     title = payload.title or generated.title
     description = payload.description or generated.rationale
+    evidence_store = EvidenceStoreService.for_db(db)
 
     hypothesis = Hypothesis(
         program_id=target.program_id,
@@ -353,6 +368,26 @@ def create_hypothesis(payload: HypothesisCreate, db: Session = Depends(get_db)) 
     )
     db.add(hypothesis)
     db.flush()
+
+    evidence_store.record_request(
+        stage=FlowStage.HYPOTHESIS,
+        program_id=target.program_id,
+        target_id=target.id,
+        hypothesis_id=hypothesis.id,
+        actor=payload.created_by,
+        payload=payload.model_dump(mode="json", exclude_none=True),
+    )
+    evidence_store.record_response(
+        stage=FlowStage.HYPOTHESIS,
+        program_id=target.program_id,
+        target_id=target.id,
+        hypothesis_id=hypothesis.id,
+        actor=payload.created_by,
+        payload=hypothesis_agent.build_output(
+            hypothesis_id=hypothesis.id,
+            draft=generated,
+        ).model_dump(mode="json"),
+    )
 
     decision_logger = DecisionLoggerService(db)
     decision_logger.log(
@@ -387,13 +422,38 @@ def list_hypotheses(db: Session = Depends(get_db)) -> list[Hypothesis]:
 )
 def request_hypothesis_approval(
     hypothesis_id: int,
-    payload: ApprovalRequestCreate,
+    payload: ApprovalRequest,
     db: Session = Depends(get_db),
 ) -> Approval:
     hypothesis = _get_hypothesis_or_404(db, hypothesis_id)
     decision_logger = DecisionLoggerService(db)
-    workflow = ApprovalWorkflowService(db, decision_logger)
-    approval = workflow.request(hypothesis, requested_by=payload.requested_by)
+    evidence_store = EvidenceStoreService.for_db(db)
+    workflow = ApprovalWorkflowService(db, decision_logger, evidence_store)
+    approval = workflow.request(
+        hypothesis,
+        requested_by=payload.requested_by,
+        rationale=payload.rationale,
+        expires_at=payload.expires_at,
+    )
+    db.flush()
+    evidence_store.record_request(
+        stage=FlowStage.APPROVAL,
+        program_id=hypothesis.program_id,
+        target_id=hypothesis.target_id,
+        hypothesis_id=hypothesis.id,
+        approval_id=approval.id,
+        actor=payload.requested_by,
+        payload=payload.model_dump(mode="json", exclude_none=True),
+    )
+    evidence_store.record_response(
+        stage=FlowStage.APPROVAL,
+        program_id=hypothesis.program_id,
+        target_id=hypothesis.target_id,
+        hypothesis_id=hypothesis.id,
+        approval_id=approval.id,
+        actor=payload.requested_by,
+        payload=ApprovalRead.model_validate(approval).model_dump(mode="json"),
+    )
     db.commit()
     db.refresh(approval)
     return approval
@@ -404,20 +464,138 @@ def list_approvals(db: Session = Depends(get_db)) -> list[Approval]:
     return list(db.scalars(select(Approval).order_by(desc(Approval.created_at))))
 
 
-@router.post("/approvals/{approval_id}/decide", response_model=ApprovalRead)
-def decide_approval(
+@router.get("/approvals/pending", response_model=list[ApprovalRead])
+def list_pending_approvals(db: Session = Depends(get_db)) -> list[Approval]:
+    decision_logger = DecisionLoggerService(db)
+    workflow = ApprovalWorkflowService(db, decision_logger, EvidenceStoreService.for_db(db))
+    pending = workflow.list_pending()
+    db.commit()
+    for approval in pending:
+        db.refresh(approval)
+    return pending
+
+
+@router.post("/approvals/{approval_id}/approve", response_model=ApprovalRead)
+def approve_approval(
     approval_id: int,
     payload: ApprovalDecision,
     db: Session = Depends(get_db),
 ) -> Approval:
     approval = _get_approval_or_404(db, approval_id)
     decision_logger = DecisionLoggerService(db)
-    workflow = ApprovalWorkflowService(db, decision_logger)
-    updated = workflow.decide(
+    evidence_store = EvidenceStoreService.for_db(db)
+    workflow = ApprovalWorkflowService(db, decision_logger, evidence_store)
+    updated = workflow.approve(
         approval=approval,
         approver=payload.approver,
-        status_value=payload.status,
-        reason=payload.reason,
+        rationale=payload.rationale,
+    )
+    db.flush()
+    hypothesis = _get_hypothesis_or_404(db, updated.hypothesis_id)
+    evidence_store.record_request(
+        stage=FlowStage.APPROVAL,
+        program_id=hypothesis.program_id,
+        target_id=hypothesis.target_id,
+        hypothesis_id=updated.hypothesis_id,
+        approval_id=updated.id,
+        actor=payload.approver,
+        payload=payload.model_dump(mode="json"),
+    )
+    evidence_store.record_response(
+        stage=FlowStage.APPROVAL,
+        program_id=hypothesis.program_id,
+        target_id=hypothesis.target_id,
+        hypothesis_id=updated.hypothesis_id,
+        approval_id=updated.id,
+        actor=payload.approver,
+        payload=ApprovalRead.model_validate(updated).model_dump(mode="json"),
+    )
+    db.commit()
+    db.refresh(updated)
+    return updated
+
+
+@router.post("/approvals/{approval_id}/reject", response_model=ApprovalRead)
+def reject_approval(
+    approval_id: int,
+    payload: ApprovalDecision,
+    db: Session = Depends(get_db),
+) -> Approval:
+    approval = _get_approval_or_404(db, approval_id)
+    decision_logger = DecisionLoggerService(db)
+    evidence_store = EvidenceStoreService.for_db(db)
+    workflow = ApprovalWorkflowService(db, decision_logger, evidence_store)
+    updated = workflow.reject(
+        approval=approval,
+        approver=payload.approver,
+        rationale=payload.rationale,
+    )
+    db.flush()
+    hypothesis = _get_hypothesis_or_404(db, updated.hypothesis_id)
+    evidence_store.record_request(
+        stage=FlowStage.APPROVAL,
+        program_id=hypothesis.program_id,
+        target_id=hypothesis.target_id,
+        hypothesis_id=updated.hypothesis_id,
+        approval_id=updated.id,
+        actor=payload.approver,
+        payload=payload.model_dump(mode="json"),
+    )
+    evidence_store.record_response(
+        stage=FlowStage.APPROVAL,
+        program_id=hypothesis.program_id,
+        target_id=hypothesis.target_id,
+        hypothesis_id=updated.hypothesis_id,
+        approval_id=updated.id,
+        actor=payload.approver,
+        payload=ApprovalRead.model_validate(updated).model_dump(mode="json"),
+    )
+    db.commit()
+    db.refresh(updated)
+    return updated
+
+
+@router.post("/approvals/{approval_id}/decide", response_model=ApprovalRead)
+def decide_approval(
+    approval_id: int,
+    payload: ApprovalStatusUpdate,
+    db: Session = Depends(get_db),
+) -> Approval:
+    approval = _get_approval_or_404(db, approval_id)
+    decision_logger = DecisionLoggerService(db)
+    evidence_store = EvidenceStoreService.for_db(db)
+    workflow = ApprovalWorkflowService(db, decision_logger, evidence_store)
+    if payload.status == ApprovalStatus.APPROVED.value:
+        updated = workflow.approve(
+            approval=approval,
+            approver=payload.approver,
+            rationale=payload.rationale,
+        )
+    else:
+        updated = workflow.reject(
+            approval=approval,
+            approver=payload.approver,
+            rationale=payload.rationale,
+        )
+    db.flush()
+    hypothesis = _get_hypothesis_or_404(db, updated.hypothesis_id)
+    evidence_store.record_request(
+        stage=FlowStage.APPROVAL,
+        program_id=hypothesis.program_id,
+        target_id=hypothesis.target_id,
+        hypothesis_id=updated.hypothesis_id,
+        approval_id=updated.id,
+        actor=payload.approver,
+        payload=payload.model_dump(mode="json"),
+    )
+    evidence_store.record_response(
+        stage=FlowStage.APPROVAL,
+        program_id=hypothesis.program_id,
+        target_id=hypothesis.target_id,
+        hypothesis_id=updated.hypothesis_id,
+        approval_id=updated.id,
+        actor=payload.approver,
+        payload=ApprovalRead.model_validate(updated).model_dump(mode="json"),
     )
     db.commit()
     db.refresh(updated)
@@ -429,6 +607,7 @@ def request_execution(payload: ExecutionRequest, db: Session = Depends(get_db)) 
     hypothesis = _get_hypothesis_or_404(db, payload.hypothesis_id)
     target = _get_target_or_404(db, hypothesis.target_id)
     program = _get_program_or_404(db, hypothesis.program_id)
+    evidence_store = EvidenceStoreService.for_db(db)
     scope_policy = ProgramPolicy.model_validate(program.scope_policy or {})
     target_scope_result = scope_guard_agent.validate_target(
         scope_policy=scope_policy,
@@ -439,11 +618,6 @@ def request_execution(payload: ExecutionRequest, db: Session = Depends(get_db)) 
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Execucao negada por escopo. Motivo: {target_scope_result.message}",
-        )
-    if hypothesis.status != HypothesisStatus.APPROVED.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Execucao so e permitida para hipoteses aprovadas.",
         )
 
     proposed_action = ProposedAction(
@@ -464,36 +638,54 @@ def request_execution(payload: ExecutionRequest, db: Session = Depends(get_db)) 
         )
 
     manual_approval_result = scope_guard_agent.requires_manual_approval(scope_policy, proposed_action)
-    latest_approval = db.scalar(
-        select(Approval)
-        .where(Approval.hypothesis_id == hypothesis.id)
-        .order_by(desc(Approval.created_at))
-    )
-    if latest_approval is None or latest_approval.status != ApprovalStatus.APPROVED.value:
-        detail = "Execucao bloqueada: aprovacao humana valida nao encontrada."
-        if manual_approval_result.requires_manual_approval:
-            detail = (
-                f"{manual_approval_result.message} "
-                "Nenhuma aprovacao humana valida foi encontrada para esta hipotese."
-            )
+    decision_logger = DecisionLoggerService(db)
+    workflow = ApprovalWorkflowService(db, decision_logger)
+    gate_result = workflow.evaluate_execution_gate(hypothesis)
+    if gate_result.commit_required:
+        db.commit()
+    if not gate_result.allowed:
+        detail = gate_result.message
+        if manual_approval_result.requires_manual_approval and manual_approval_result.message not in detail:
+            detail = f"{manual_approval_result.message} {detail}"
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=detail,
         )
+    latest_approval = gate_result.approval
 
     execution = Execution(
         hypothesis_id=hypothesis.id,
         requested_by=payload.requested_by,
-        approved_by=latest_approval.approver,
+        approved_by=latest_approval.approver if latest_approval is not None else None,
         status=ExecutionStatus.QUEUED.value,
         action_plan=payload.action_plan,
     )
     db.add(execution)
     db.flush()
 
+    evidence_store.record_request(
+        stage=FlowStage.EXECUTION,
+        program_id=program.id,
+        target_id=target.id,
+        hypothesis_id=hypothesis.id,
+        approval_id=latest_approval.id if latest_approval is not None else None,
+        execution_id=execution.id,
+        actor=payload.requested_by,
+        payload=payload.model_dump(mode="json"),
+    )
+    evidence_store.record_response(
+        stage=FlowStage.EXECUTION,
+        program_id=program.id,
+        target_id=target.id,
+        hypothesis_id=hypothesis.id,
+        approval_id=latest_approval.id if latest_approval is not None else None,
+        execution_id=execution.id,
+        actor=payload.requested_by,
+        payload=ExecutionRead.model_validate(execution).model_dump(mode="json"),
+    )
+
     execution_queue.enqueue(execution.id)
 
-    decision_logger = DecisionLoggerService(db)
     decision_logger.log(
         event_type="execution_requested",
         entity_type="execution",
@@ -503,7 +695,8 @@ def request_execution(payload: ExecutionRequest, db: Session = Depends(get_db)) 
         reason=manual_approval_result.message,
         metadata={
             "hypothesis_id": hypothesis.id,
-            "approved_by": latest_approval.approver,
+            "approved_by": latest_approval.approver if latest_approval is not None else None,
+            "approval_id": latest_approval.id if latest_approval is not None else None,
             "target_scope_code": target_scope_result.code,
             "manual_approval_required": manual_approval_result.requires_manual_approval,
             "manual_approval_reasons": manual_approval_result.reasons,
@@ -583,23 +776,14 @@ def complete_execution(
         execution.status = ExecutionStatus.RUNNING.value
         execution.started_at = datetime.now(UTC)
 
+    evidence_store = EvidenceStoreService.for_db(db)
     execution.status = ExecutionStatus.COMPLETED.value
     execution.completed_at = datetime.now(UTC)
     execution.output_summary = payload.output_summary
 
-    evidence_count = 0
-    for item in payload.evidence:
-        evidence = Evidence(
-            execution_id=execution.id,
-            evidence_type=item.evidence_type,
-            content=item.content,
-            artifact_uri=item.artifact_uri,
-        )
-        db.add(evidence)
-        evidence_count += 1
-
     hypothesis = _get_hypothesis_or_404(db, execution.hypothesis_id)
     target = _get_target_or_404(db, hypothesis.target_id)
+    program = _get_program_or_404(db, hypothesis.program_id)
 
     finding_data = (
         payload.finding.model_dump() if payload.finding else evidence_agent.build_finding(hypothesis, execution)
@@ -619,6 +803,73 @@ def complete_execution(
     )
     db.add(finding)
     db.flush()
+
+    evidence_store.record_request(
+        stage=FlowStage.EXECUTION,
+        program_id=program.id,
+        target_id=target.id,
+        hypothesis_id=hypothesis.id,
+        execution_id=execution.id,
+        actor=payload.actor,
+        payload=payload.model_dump(mode="json", exclude_none=True),
+    )
+
+    evidence_count = 0
+    for item in payload.evidence:
+        evidence_store.store_raw_evidence(
+            EvidenceRecordCreate(
+                program_id=program.id,
+                target_id=target.id,
+                hypothesis_id=hypothesis.id,
+                execution_id=execution.id,
+                finding_id=finding.id,
+                evidence_type=item.evidence_type,
+                content=item.content,
+                artifact_uri=item.artifact_uri,
+            )
+        )
+        evidence_count += 1
+
+    report_draft = evidence_agent.build_report_draft(
+        hypothesis,
+        execution,
+        finding,
+        evidence_count=evidence_count,
+    )
+    evidence_store.store_report_draft(
+        ReportDraftCreate(
+            program_id=program.id,
+            target_id=target.id,
+            hypothesis_id=hypothesis.id,
+            execution_id=execution.id,
+            finding_id=finding.id,
+            title=report_draft["title"],
+            narrative=report_draft["narrative"],
+            generated_by=report_draft["generated_by"],
+            status=report_draft["status"],
+        )
+    )
+
+    evidence_store.record_response(
+        stage=FlowStage.FINDING,
+        program_id=program.id,
+        target_id=target.id,
+        hypothesis_id=hypothesis.id,
+        execution_id=execution.id,
+        finding_id=finding.id,
+        actor=payload.actor,
+        payload=FindingRead.model_validate(finding).model_dump(mode="json"),
+    )
+    evidence_store.record_response(
+        stage=FlowStage.REPORT,
+        program_id=program.id,
+        target_id=target.id,
+        hypothesis_id=hypothesis.id,
+        execution_id=execution.id,
+        finding_id=finding.id,
+        actor=payload.actor,
+        payload=report_draft,
+    )
 
     hypothesis.status = HypothesisStatus.EXECUTED.value
 
@@ -642,16 +893,44 @@ def complete_execution(
         metadata={"hypothesis_id": hypothesis.id, "execution_id": execution.id},
     )
 
+    response = ExecutionCompleteResponse(execution=execution, finding=finding, evidence_count=evidence_count)
+    evidence_store.record_response(
+        stage=FlowStage.EXECUTION,
+        program_id=program.id,
+        target_id=target.id,
+        hypothesis_id=hypothesis.id,
+        execution_id=execution.id,
+        finding_id=finding.id,
+        actor=payload.actor,
+        payload=response.model_dump(mode="json"),
+    )
     db.commit()
     db.refresh(execution)
     db.refresh(finding)
-
-    return ExecutionCompleteResponse(execution=execution, finding=finding, evidence_count=evidence_count)
+    return response
 
 
 @router.get("/findings", response_model=list[FindingRead])
 def list_findings(db: Session = Depends(get_db)) -> list[Finding]:
     return list(db.scalars(select(Finding).order_by(desc(Finding.created_at))))
+
+
+@router.get("/evidence-store/programs/{program_id}", response_model=EvidenceStoreQueryResult)
+def get_program_evidence_store(program_id: int, db: Session = Depends(get_db)) -> EvidenceStoreQueryResult:
+    _get_program_or_404(db, program_id)
+    return EvidenceStoreService.for_db(db).get_by_program(program_id)
+
+
+@router.get("/evidence-store/targets/{target_id}", response_model=EvidenceStoreQueryResult)
+def get_target_evidence_store(target_id: int, db: Session = Depends(get_db)) -> EvidenceStoreQueryResult:
+    _get_target_or_404(db, target_id)
+    return EvidenceStoreService.for_db(db).get_by_target(target_id)
+
+
+@router.get("/evidence-store/findings/{finding_id}", response_model=EvidenceStoreQueryResult)
+def get_finding_evidence_store(finding_id: int, db: Session = Depends(get_db)) -> EvidenceStoreQueryResult:
+    _get_finding_or_404(db, finding_id)
+    return EvidenceStoreService.for_db(db).get_by_finding(finding_id)
 
 
 @router.get("/audit/decisions", response_model=list[DecisionLogRead])

@@ -21,6 +21,9 @@ class SimpleExecutionQueue:
         with self._lock:
             return list(self._queue)
 
+    def clear(self) -> None:
+        with self._lock:
+            self._queue.clear()
+
 
 execution_queue = SimpleExecutionQueue()
-

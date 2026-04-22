@@ -14,6 +14,7 @@ Plataforma de apoio para programas autorizados de bug bounty com fluxo **human-i
 - **Persistência**: SQLite + SQLAlchemy.
 - **Contratos**: Pydantic.
 - **Observabilidade**: logging estruturado em JSON.
+- **Evidence Store**: snapshots sanitizados de request/response/decision, evidência bruta sanitizada e drafts narrativos separados.
 - **Fila**: fila simples in-memory para despacho manual de execuções.
 - **Adapters**: camada dedicada para ferramentas externas (mock no MVP).
 - **Agentes com responsabilidade isolada**:
@@ -24,6 +25,7 @@ Plataforma de apoio para programas autorizados de bug bounty com fluxo **human-i
   - Evidence & Report Agent
 
 Detalhamento da arquitetura: [docs/architecture.md](/home/eduardo/projects/scopepilot/docs/architecture.md)
+Detalhamento do Evidence Store: [docs/evidence_store.md](/home/eduardo/projects/scopepilot/docs/evidence_store.md)
 
 ## Modelo de dados do MVP
 - `Program`: programa autorizado e política de escopo.
@@ -40,8 +42,8 @@ Detalhamento da arquitetura: [docs/architecture.md](/home/eduardo/projects/scope
 1. `program` -> cadastro com política de escopo.
 2. `target` -> validação Scope Guard.
 3. `hypothesis` -> criada manualmente ou assistida.
-4. `approval` -> decisão humana obrigatória.
-5. `execution` -> somente após aprovação válida.
+4. `approval request` -> solicitação humana rastreável com `pending`, `approved`, `rejected` ou `expired`.
+5. `execution` -> somente após decisão humana `approved` válida e não expirada.
 6. `finding` -> gerado com base em execução e evidências.
 
 ## Estrutura do projeto
@@ -79,10 +81,16 @@ OpenAPI: `http://127.0.0.1:8000/docs`
 - `POST /api/recon/run`
 - `POST /api/hypotheses`
 - `POST /api/hypotheses/{id}/approvals`
+- `GET /api/approvals/pending`
+- `POST /api/approvals/{id}/approve`
+- `POST /api/approvals/{id}/reject`
 - `POST /api/approvals/{id}/decide`
 - `POST /api/executions`
 - `POST /api/executions/queue/next`
 - `POST /api/executions/{id}/complete`
+- `GET /api/evidence-store/programs/{id}`
+- `GET /api/evidence-store/targets/{id}`
+- `GET /api/evidence-store/findings/{id}`
 - `GET /api/findings`
 - `GET /api/audit/decisions`
 
@@ -90,5 +98,7 @@ OpenAPI: `http://127.0.0.1:8000/docs`
 - Este MVP não executa exploração automática ativa.
 - O adapter de recon é mock e usa somente lógica segura/passiva.
 - Regras de escopo e lista de termos proibidos devem ser endurecidas antes de produção.
+- A execução depende formalmente de uma aprovação humana registrada e válida.
+- O Evidence Store sanitiza request/response e nunca deve persistir segredos.
+- Evidência bruta e narrativa gerada por IA são armazenadas separadamente.
 - Recomenda-se autenticação/autorização e assinatura de decisões para ambiente real.
-

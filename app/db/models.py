@@ -92,6 +92,7 @@ class Approval(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     hypothesis_id: Mapped[int] = mapped_column(ForeignKey("hypotheses.id"), index=True, nullable=False)
     requested_by: Mapped[str] = mapped_column(String(120), nullable=False)
+    request_rationale: Mapped[str] = mapped_column(Text, nullable=False, default="")
     approver: Mapped[str | None] = mapped_column(String(120), nullable=True)
     status: Mapped[str] = mapped_column(
         String(30),
@@ -104,6 +105,7 @@ class Approval(Base):
         default=lambda: datetime.now(UTC),
         nullable=False,
     )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -134,9 +136,15 @@ class Evidence(Base):
     __tablename__ = "evidence"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    program_id: Mapped[int] = mapped_column(ForeignKey("programs.id"), index=True, nullable=False)
+    target_id: Mapped[int] = mapped_column(ForeignKey("targets.id"), index=True, nullable=False)
+    hypothesis_id: Mapped[int] = mapped_column(ForeignKey("hypotheses.id"), index=True, nullable=False)
     execution_id: Mapped[int] = mapped_column(ForeignKey("executions.id"), index=True, nullable=False)
+    finding_id: Mapped[int | None] = mapped_column(ForeignKey("findings.id"), index=True, nullable=True)
     evidence_type: Mapped[str] = mapped_column(String(50), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    content_format: Mapped[str] = mapped_column(String(30), nullable=False, default="text")
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     artifact_uri: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -182,5 +190,52 @@ class DecisionLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+
+
+class FlowSnapshot(Base):
+    __tablename__ = "flow_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    program_id: Mapped[int] = mapped_column(ForeignKey("programs.id"), index=True, nullable=False)
+    target_id: Mapped[int | None] = mapped_column(ForeignKey("targets.id"), index=True, nullable=True)
+    hypothesis_id: Mapped[int | None] = mapped_column(ForeignKey("hypotheses.id"), index=True, nullable=True)
+    approval_id: Mapped[int | None] = mapped_column(ForeignKey("approvals.id"), index=True, nullable=True)
+    execution_id: Mapped[int | None] = mapped_column(ForeignKey("executions.id"), index=True, nullable=True)
+    finding_id: Mapped[int | None] = mapped_column(ForeignKey("findings.id"), index=True, nullable=True)
+    stage: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    snapshot_type: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    actor: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    payload_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+
+
+class ReportDraft(Base):
+    __tablename__ = "report_drafts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    program_id: Mapped[int] = mapped_column(ForeignKey("programs.id"), index=True, nullable=False)
+    target_id: Mapped[int] = mapped_column(ForeignKey("targets.id"), index=True, nullable=False)
+    hypothesis_id: Mapped[int] = mapped_column(ForeignKey("hypotheses.id"), index=True, nullable=False)
+    execution_id: Mapped[int] = mapped_column(ForeignKey("executions.id"), index=True, nullable=False)
+    finding_id: Mapped[int] = mapped_column(ForeignKey("findings.id"), index=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    narrative: Mapped[str] = mapped_column(Text, nullable=False)
+    generated_by: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="draft")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )

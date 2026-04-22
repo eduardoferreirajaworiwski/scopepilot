@@ -35,4 +35,5 @@ bug_bounty_copilot.egg-info/SOURCES.txt
 bug_bounty_copilot.egg-info/dependency_links.txt
 bug_bounty_copilot.egg-info/requires.txt
 bug_bounty_copilot.egg-info/top_level.txt
+tests/test_approval_api.py
 tests/test_hypothesis_engine.py

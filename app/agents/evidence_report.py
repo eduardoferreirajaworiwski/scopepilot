@@ -1,4 +1,4 @@
-from app.db.models import Execution, Hypothesis
+from app.db.models import Execution, Finding, Hypothesis
 
 
 class EvidenceReportAgent:
@@ -16,3 +16,25 @@ class EvidenceReportAgent:
             "status": "new",
         }
 
+    def build_report_draft(
+        self,
+        hypothesis: Hypothesis,
+        execution: Execution,
+        finding: Finding,
+        *,
+        evidence_count: int,
+    ) -> dict:
+        narrative = (
+            "Draft report generated from approved workflow artifacts. "
+            "This narrative requires human review before external use.\n\n"
+            f"Hypothesis: {hypothesis.title}\n"
+            f"Finding: {finding.title}\n"
+            f"Execution summary: {execution.output_summary or 'N/A'}\n"
+            f"Evidence items: {evidence_count}"
+        )
+        return {
+            "title": f"Draft report for finding #{finding.id}",
+            "narrative": narrative,
+            "generated_by": "evidence_report_agent",
+            "status": "draft",
+        }

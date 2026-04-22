@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from app.schemas.enums import (
     ApprovalStatus,
@@ -96,24 +96,40 @@ class HypothesisRead(ORMModel):
     updated_at: datetime
 
 
-class ApprovalRequestCreate(BaseModel):
+class ApprovalRequest(BaseModel):
     requested_by: str = Field(min_length=2, max_length=120)
+    rationale: str = Field(
+        min_length=3,
+        validation_alias=AliasChoices("rationale", "reason"),
+    )
+    expires_at: datetime | None = None
+
+
+ApprovalRequestCreate = ApprovalRequest
 
 
 class ApprovalDecision(BaseModel):
-    status: Literal["approved", "rejected"]
     approver: str = Field(min_length=2, max_length=120)
-    reason: str = Field(min_length=3)
+    rationale: str = Field(
+        min_length=3,
+        validation_alias=AliasChoices("rationale", "reason"),
+    )
+
+
+class ApprovalStatusUpdate(ApprovalDecision):
+    status: Literal["approved", "rejected"]
 
 
 class ApprovalRead(ORMModel):
     id: int
     hypothesis_id: int
     requested_by: str
+    request_rationale: str
     approver: str | None
     status: ApprovalStatus
     decision_reason: str | None
     created_at: datetime
+    expires_at: datetime | None
     decided_at: datetime | None
 
 
@@ -167,9 +183,15 @@ class ExecutionRead(ORMModel):
 
 class EvidenceRead(ORMModel):
     id: int
+    program_id: int
+    target_id: int
+    hypothesis_id: int
     execution_id: int
+    finding_id: int | None
     evidence_type: str
     content: str
+    content_format: str
+    content_sha256: str
     artifact_uri: str | None
     created_at: datetime
 

@@ -5,6 +5,7 @@ Summary: MVP defensável de Bug Bounty Copilot com fluxo human-in-the-loop
 Requires-Python: >=3.11
 Description-Content-Type: text/markdown
 Requires-Dist: fastapi>=0.115.0
+Requires-Dist: httpx>=0.27.0
 Requires-Dist: pydantic>=2.7.0
 Requires-Dist: pydantic-settings>=2.3.0
 Requires-Dist: sqlalchemy>=2.0.30
@@ -52,8 +53,8 @@ Detalhamento da arquitetura: [docs/architecture.md](/home/eduardo/projects/scope
 1. `program` -> cadastro com política de escopo.
 2. `target` -> validação Scope Guard.
 3. `hypothesis` -> criada manualmente ou assistida.
-4. `approval` -> decisão humana obrigatória.
-5. `execution` -> somente após aprovação válida.
+4. `approval request` -> solicitação humana rastreável com `pending`, `approved`, `rejected` ou `expired`.
+5. `execution` -> somente após decisão humana `approved` válida e não expirada.
 6. `finding` -> gerado com base em execução e evidências.
 
 ## Estrutura do projeto
@@ -91,6 +92,9 @@ OpenAPI: `http://127.0.0.1:8000/docs`
 - `POST /api/recon/run`
 - `POST /api/hypotheses`
 - `POST /api/hypotheses/{id}/approvals`
+- `GET /api/approvals/pending`
+- `POST /api/approvals/{id}/approve`
+- `POST /api/approvals/{id}/reject`
 - `POST /api/approvals/{id}/decide`
 - `POST /api/executions`
 - `POST /api/executions/queue/next`
@@ -102,5 +106,5 @@ OpenAPI: `http://127.0.0.1:8000/docs`
 - Este MVP não executa exploração automática ativa.
 - O adapter de recon é mock e usa somente lógica segura/passiva.
 - Regras de escopo e lista de termos proibidos devem ser endurecidas antes de produção.
+- A execução depende formalmente de uma aprovação humana registrada e válida.
 - Recomenda-se autenticação/autorização e assinatura de decisões para ambiente real.
-

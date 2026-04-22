@@ -13,6 +13,7 @@ class ApprovalStatus(str, Enum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
+    EXPIRED = "expired"
 
 
 class ExecutionStatus(str, Enum):

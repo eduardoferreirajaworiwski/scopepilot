@@ -41,15 +41,15 @@ Entregar uma plataforma defensável para programas autorizados de bug bounty, co
 3. Executar recon passivo em target in-scope.
 4. Criar hipótese.
 5. Solicitar aprovação humana.
-6. Decidir aprovação (approved/rejected).
-7. Solicitar execução (somente com hipótese aprovada).
+6. Decidir aprovação (`approved`, `rejected` ou `expired` por expiração).
+7. Solicitar execução (somente com decisão humana `approved` válida).
 8. Despachar execução manual da fila.
 9. Concluir execução com evidências e gerar finding.
 
 ## Controles defensáveis
 - Filtro de termos proibidos no plano de execução.
 - Bloqueio automático de execução sem aprovação.
+- Gate formal de execução dependente de aprovação válida e não expirada.
 - Bloqueio de ações para target fora de escopo.
 - Registro de decisões operacionais e de segurança em banco.
 - Logging JSON para integração com SIEM futuramente.
-
