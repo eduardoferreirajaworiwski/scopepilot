@@ -48,7 +48,12 @@ class ApprovalWorkflowService:
             actor=requested_by,
             decision="pending",
             reason="Hipótese enviada para validação humana.",
-            metadata={"hypothesis_status": hypothesis.status},
+            metadata={
+                "hypothesis_status": hypothesis.status,
+                "required_approval_level": hypothesis.required_approval_level,
+                "confidence": hypothesis.confidence,
+                "suggested_next_step": hypothesis.suggested_next_step,
+            },
         )
         return approval
 
@@ -91,4 +96,3 @@ class ApprovalWorkflowService:
             },
         )
         return approval
-

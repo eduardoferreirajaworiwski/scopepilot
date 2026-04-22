@@ -1,14 +1,23 @@
+from app.schemas.hypothesis_engine import (
+    HypothesisDraft,
+    HypothesisEngineInput,
+    HypothesisEngineMode,
+    HypothesisEngineOutput,
+)
+from app.services.hypothesis_engine import HypothesisEngineService
+
+
 class HypothesisAgent:
-    def propose(self, target_identifier: str, recon_summary: str | None = None) -> dict:
-        title = f"Potential misconfiguration on {target_identifier}"
-        description = (
-            "Hypothesis generated from passive recon signals. "
-            "Investigate authorization boundaries, exposed endpoints, and "
-            "input validation behavior under approved scope constraints."
-        )
+    def __init__(self, mode: HypothesisEngineMode = HypothesisEngineMode.MOCK) -> None:
+        self.service = HypothesisEngineService(mode=mode)
 
-        if recon_summary:
-            description = f"{description}\n\nRecon context: {recon_summary}"
+    def generate(self, payload: HypothesisEngineInput) -> HypothesisDraft:
+        return self.service.generate(payload)
 
-        return {"title": title, "description": description}
-
+    def build_output(
+        self,
+        *,
+        hypothesis_id: int | str,
+        draft: HypothesisDraft,
+    ) -> HypothesisEngineOutput:
+        return self.service.build_output(hypothesis_id=hypothesis_id, draft=draft)

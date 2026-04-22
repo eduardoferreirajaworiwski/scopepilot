@@ -27,3 +27,7 @@ class FindingStatus(str, Enum):
     REPORTED = "reported"
     CLOSED = "closed"
 
+
+class RequiredApprovalLevel(str, Enum):
+    ANALYST = "analyst"
+    SECURITY_LEAD = "security_lead"

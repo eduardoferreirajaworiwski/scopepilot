@@ -39,10 +39,17 @@ from app.schemas.models import (
     QueueSnapshot,
     ReconRecordRead,
     ReconRunRequest,
-    ScopePolicy,
     TargetCreate,
     TargetRead,
 )
+from app.schemas.hypothesis_engine import (
+    HypothesisAssetInput,
+    HypothesisContextInput,
+    HypothesisEngineInput,
+    HypothesisEvidenceInput,
+    HypothesisProgramInput,
+)
+from app.schemas.scope_guard import ProgramPolicy, ProposedAction
 from app.services.approval_workflow import ApprovalWorkflowService
 from app.services.decision_log import DecisionLoggerService
 from app.services.simple_queue import execution_queue
@@ -90,6 +97,81 @@ def _get_execution_or_404(db: Session, execution_id: int) -> Execution:
     return execution
 
 
+def _map_observation_type(observation: str) -> str:
+    lower = observation.lower()
+    if "endpoint" in lower or "route" in lower:
+        return "endpoint_exposure"
+    if "tls" in lower or "header" in lower or "certificate" in lower:
+        return "header_misconfiguration"
+    if "dns" in lower or "subdomain" in lower:
+        return "dns_exposure"
+    if "technology" in lower or "stack" in lower:
+        return "technology_disclosure"
+    return "recon_signal"
+
+
+def _build_hypothesis_engine_input(
+    *,
+    program: Program,
+    target: Target,
+    recon_record: ReconRecord | None,
+) -> HypothesisEngineInput:
+    evidence_items: list[HypothesisEvidenceInput] = []
+    context_tags: list[str] = []
+    context_summary = f"Target {target.identifier} is registered as {target.target_type}."
+
+    if recon_record is not None:
+        context_summary = recon_record.summary
+        for observation in recon_record.observations:
+            evidence_items.append(
+                HypothesisEvidenceInput(
+                    evidence_type=_map_observation_type(str(observation)),
+                    summary=str(observation),
+                    source="recon_record",
+                    signal_strength=0.6,
+                )
+            )
+        if any("endpoint" in str(item).lower() for item in recon_record.observations):
+            context_tags.append("endpoint_exposure")
+        if any("auth" in str(item).lower() for item in recon_record.observations):
+            context_tags.append("authenticated_surface")
+        if not evidence_items:
+            evidence_items.append(
+                HypothesisEvidenceInput(
+                    evidence_type="recon_signal",
+                    summary=recon_record.summary,
+                    source="recon_summary",
+                    signal_strength=0.4,
+                )
+            )
+    else:
+        evidence_items.append(
+            HypothesisEvidenceInput(
+                evidence_type="asset_context",
+                summary=f"In-scope asset {target.identifier} was registered under program {program.name}.",
+                source="target_registry",
+                signal_strength=0.2,
+            )
+        )
+
+    return HypothesisEngineInput(
+        asset=HypothesisAssetInput(
+            asset_id=target.id,
+            identifier=target.identifier,
+            asset_type=target.target_type,
+            in_scope=target.in_scope,
+        ),
+        evidence=evidence_items,
+        context=HypothesisContextInput(summary=context_summary, tags=context_tags),
+        program=HypothesisProgramInput(
+            program_id=program.id,
+            name=program.name,
+            owner=program.owner,
+            scope_summary=program.description or None,
+        ),
+    )
+
+
 @router.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
@@ -133,8 +215,8 @@ def list_programs(db: Session = Depends(get_db)) -> list[Program]:
 @router.post("/targets", response_model=TargetRead, status_code=status.HTTP_201_CREATED)
 def create_target(payload: TargetCreate, db: Session = Depends(get_db)) -> Target:
     program = _get_program_or_404(db, payload.program_id)
-    scope_policy = ScopePolicy.model_validate(program.scope_policy or {})
-    in_scope, scope_reason = scope_guard_agent.validate_target(
+    scope_policy = ProgramPolicy.model_validate(program.scope_policy or {})
+    scope_result = scope_guard_agent.validate_target(
         scope_policy=scope_policy,
         identifier=payload.identifier,
         target_type=payload.target_type,
@@ -145,8 +227,8 @@ def create_target(payload: TargetCreate, db: Session = Depends(get_db)) -> Targe
         identifier=payload.identifier,
         target_type=payload.target_type,
         created_by=payload.created_by,
-        in_scope=in_scope,
-        scope_reason=scope_reason,
+        in_scope=scope_result.in_scope,
+        scope_reason=scope_result.message,
     )
     db.add(target)
     db.flush()
@@ -157,9 +239,14 @@ def create_target(payload: TargetCreate, db: Session = Depends(get_db)) -> Targe
         entity_type="target",
         entity_id=target.id,
         actor=payload.created_by,
-        decision="allowed" if in_scope else "blocked",
-        reason=scope_reason,
-        metadata={"program_id": program.id, "identifier": payload.identifier},
+        decision="allowed" if scope_result.in_scope else "blocked",
+        reason=scope_result.message,
+        metadata={
+            "program_id": program.id,
+            "identifier": payload.identifier,
+            "code": scope_result.code,
+            "matched_rule": scope_result.matched_rule,
+        },
     )
     db.commit()
     db.refresh(target)
@@ -233,7 +320,8 @@ def create_hypothesis(payload: HypothesisCreate, db: Session = Depends(get_db)) 
             detail=f"Hipótese bloqueada: target fora de escopo. Motivo: {target.scope_reason}",
         )
 
-    recon_summary: str | None = None
+    program = _get_program_or_404(db, target.program_id)
+    recon_record: ReconRecord | None = None
     if payload.recon_record_id is not None:
         recon_record = db.get(ReconRecord, payload.recon_record_id)
         if recon_record is None or recon_record.target_id != target.id:
@@ -241,11 +329,14 @@ def create_hypothesis(payload: HypothesisCreate, db: Session = Depends(get_db)) 
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Recon record inválido para este target.",
             )
-        recon_summary = recon_record.summary
-
-    generated = hypothesis_agent.propose(target_identifier=target.identifier, recon_summary=recon_summary)
-    title = payload.title or generated["title"]
-    description = payload.description or generated["description"]
+    engine_input = _build_hypothesis_engine_input(
+        program=program,
+        target=target,
+        recon_record=recon_record,
+    )
+    generated = hypothesis_agent.generate(engine_input)
+    title = payload.title or generated.title
+    description = payload.description or generated.rationale
 
     hypothesis = Hypothesis(
         program_id=target.program_id,
@@ -253,6 +344,9 @@ def create_hypothesis(payload: HypothesisCreate, db: Session = Depends(get_db)) 
         recon_record_id=payload.recon_record_id,
         title=title,
         description=description,
+        confidence=generated.confidence,
+        suggested_next_step=generated.suggested_next_step,
+        required_approval_level=generated.required_approval_level.value,
         severity=payload.severity,
         created_by=payload.created_by,
         status=HypothesisStatus.DRAFT.value,
@@ -268,7 +362,13 @@ def create_hypothesis(payload: HypothesisCreate, db: Session = Depends(get_db)) 
         actor=payload.created_by,
         decision="created",
         reason="Hipótese registrada aguardando aprovação humana.",
-        metadata={"target_id": target.id, "severity": payload.severity},
+        metadata={
+            "target_id": target.id,
+            "severity": payload.severity,
+            "confidence": generated.confidence,
+            "required_approval_level": generated.required_approval_level.value,
+            "suggested_next_step": generated.suggested_next_step,
+        },
     )
     db.commit()
     db.refresh(hypothesis)
@@ -328,43 +428,70 @@ def decide_approval(
 def request_execution(payload: ExecutionRequest, db: Session = Depends(get_db)) -> Execution:
     hypothesis = _get_hypothesis_or_404(db, payload.hypothesis_id)
     target = _get_target_or_404(db, hypothesis.target_id)
-    if not target.in_scope:
+    program = _get_program_or_404(db, hypothesis.program_id)
+    scope_policy = ProgramPolicy.model_validate(program.scope_policy or {})
+    target_scope_result = scope_guard_agent.validate_target(
+        scope_policy=scope_policy,
+        identifier=target.identifier,
+        target_type=target.target_type,
+    )
+    if not target_scope_result.in_scope:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Execução negada por escopo. Motivo: {target.scope_reason}",
+            detail=f"Execucao negada por escopo. Motivo: {target_scope_result.message}",
         )
     if hypothesis.status != HypothesisStatus.APPROVED.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Execução só é permitida para hipóteses aprovadas.",
+            detail="Execucao so e permitida para hipoteses aprovadas.",
         )
 
+    proposed_action = ProposedAction(
+        target_identifier=target.identifier,
+        target_type=target.target_type,
+        technique=payload.technique,
+        description=payload.action_plan,
+        request_rate_per_minute=payload.request_rate_per_minute,
+        target_count=payload.target_count,
+        state_changing=payload.state_changing,
+        requires_authentication=payload.requires_authentication,
+    )
+    action_block_result = scope_guard_agent.block_prohibited_action(scope_policy, proposed_action)
+    if action_block_result.blocked:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=action_block_result.message,
+        )
+
+    manual_approval_result = scope_guard_agent.requires_manual_approval(scope_policy, proposed_action)
     latest_approval = db.scalar(
         select(Approval)
         .where(Approval.hypothesis_id == hypothesis.id)
         .order_by(desc(Approval.created_at))
     )
     if latest_approval is None or latest_approval.status != ApprovalStatus.APPROVED.value:
+        detail = "Execucao bloqueada: aprovacao humana valida nao encontrada."
+        if manual_approval_result.requires_manual_approval:
+            detail = (
+                f"{manual_approval_result.message} "
+                "Nenhuma aprovacao humana valida foi encontrada para esta hipotese."
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Execução bloqueada: aprovação humana válida não encontrada.",
+            detail=detail,
         )
-
-    plan_is_safe, plan_reason = scope_guard_agent.validate_action_plan(payload.action_plan)
-    execution_status = ExecutionStatus.QUEUED.value if plan_is_safe else ExecutionStatus.BLOCKED.value
 
     execution = Execution(
         hypothesis_id=hypothesis.id,
         requested_by=payload.requested_by,
         approved_by=latest_approval.approver,
-        status=execution_status,
+        status=ExecutionStatus.QUEUED.value,
         action_plan=payload.action_plan,
     )
     db.add(execution)
     db.flush()
 
-    if plan_is_safe:
-        execution_queue.enqueue(execution.id)
+    execution_queue.enqueue(execution.id)
 
     decision_logger = DecisionLoggerService(db)
     decision_logger.log(
@@ -372,11 +499,16 @@ def request_execution(payload: ExecutionRequest, db: Session = Depends(get_db)) 
         entity_type="execution",
         entity_id=execution.id,
         actor=payload.requested_by,
-        decision="queued" if plan_is_safe else "blocked",
-        reason=plan_reason,
+        decision="queued",
+        reason=manual_approval_result.message,
         metadata={
             "hypothesis_id": hypothesis.id,
             "approved_by": latest_approval.approver,
+            "target_scope_code": target_scope_result.code,
+            "manual_approval_required": manual_approval_result.requires_manual_approval,
+            "manual_approval_reasons": manual_approval_result.reasons,
+            "technique": proposed_action.technique,
+            "request_rate_per_minute": proposed_action.request_rate_per_minute,
         },
     )
 

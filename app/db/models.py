@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -63,6 +63,9 @@ class Hypothesis(Base):
     recon_record_id: Mapped[int | None] = mapped_column(ForeignKey("recon_records.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(180), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    suggested_next_step: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    required_approval_level: Mapped[str] = mapped_column(String(40), nullable=False, default="analyst")
     severity: Mapped[str] = mapped_column(String(30), nullable=False, default="medium")
     created_by: Mapped[str] = mapped_column(String(120), nullable=False)
     status: Mapped[str] = mapped_column(
@@ -181,4 +184,3 @@ class DecisionLog(Base):
         default=lambda: datetime.now(UTC),
         nullable=False,
     )
-

@@ -3,24 +3,28 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.enums import ApprovalStatus, ExecutionStatus, FindingStatus, HypothesisStatus
+from app.schemas.enums import (
+    ApprovalStatus,
+    ExecutionStatus,
+    FindingStatus,
+    HypothesisStatus,
+    RequiredApprovalLevel,
+)
+from app.schemas.scope_guard import ProgramPolicy
 
 
 class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class ScopePolicy(BaseModel):
-    allowed_domains: list[str] = Field(default_factory=list)
-    forbidden_keywords: list[str] = Field(default_factory=list)
-    notes: str | None = None
+ScopePolicy = ProgramPolicy
 
 
 class ProgramCreate(BaseModel):
     name: str = Field(min_length=3, max_length=150)
     description: str = ""
     owner: str = Field(min_length=2, max_length=120)
-    scope_policy: ScopePolicy = Field(default_factory=ScopePolicy)
+    scope_policy: ProgramPolicy = Field(default_factory=ProgramPolicy)
 
 
 class ProgramRead(ORMModel):
@@ -75,11 +79,16 @@ class HypothesisCreate(BaseModel):
 
 class HypothesisRead(ORMModel):
     id: int
+    hypothesis_id: int = Field(validation_alias="id")
     program_id: int
     target_id: int
     recon_record_id: int | None
     title: str
     description: str
+    rationale: str = Field(validation_alias="description")
+    confidence: float
+    suggested_next_step: str
+    required_approval_level: RequiredApprovalLevel
     severity: str
     created_by: str
     status: HypothesisStatus
@@ -112,6 +121,11 @@ class ExecutionRequest(BaseModel):
     hypothesis_id: int
     requested_by: str = Field(min_length=2, max_length=120)
     action_plan: str = Field(min_length=8)
+    technique: str = Field(default="manual_verification", min_length=2, max_length=80)
+    request_rate_per_minute: int = Field(default=1, ge=1)
+    target_count: int = Field(default=1, ge=1)
+    state_changing: bool = False
+    requires_authentication: bool = False
 
 
 class QueueDispatchRequest(BaseModel):
@@ -193,4 +207,3 @@ class DecisionLogRead(ORMModel):
 
 class QueueSnapshot(BaseModel):
     queued_execution_ids: list[int]
-
