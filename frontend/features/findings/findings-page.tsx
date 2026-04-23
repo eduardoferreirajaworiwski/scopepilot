@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { DefinitionList } from "@/components/shared/definition-list";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/shared/states";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getApiErrorMessage } from "@/lib/api/client";
@@ -83,6 +85,11 @@ export function FindingsPage() {
       <PageHeader
         title="Findings and reports"
         description="This workspace keeps raw evidence, inferred narrative, and final finding state separated so the operator can inspect what is factual and what is synthesized."
+        action={
+          <Link href="/audit" className={buttonVariants({ variant: "outline" })}>
+            Open audit trail
+          </Link>
+        }
       />
 
       <div className="grid gap-4 xl:grid-cols-[0.42fr_0.58fr]">

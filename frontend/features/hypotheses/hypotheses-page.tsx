@@ -1,11 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useDeferredValue, useState } from "react";
 
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/shared/states";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -237,6 +238,11 @@ export function HypothesesPage() {
       <PageHeader
         title="Hypotheses queue"
         description="Every item on this page is explicitly marked as an AI-generated hypothesis. Human approval and executed state appear as separate badges, not as implicit progress."
+        action={
+          <Link href="/approvals" className={buttonVariants({ variant: "outline" })}>
+            Open approval queue
+          </Link>
+        }
       />
 
       <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">

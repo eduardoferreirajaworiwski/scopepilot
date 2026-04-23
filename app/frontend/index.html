@@ -3,145 +3,65 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Bug Bounty Copilot</title>
+    <title>ScopePilot Operator Console</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <main class="container">
       <header class="hero">
-        <h1>Bug Bounty Copilot</h1>
+        <div class="hero-eyebrow">Authorized Programs Only</div>
+        <h1>ScopePilot</h1>
         <p>
-          Fluxo human-in-the-loop para programas autorizados com validação de escopo,
-          aprovação obrigatória e trilha de auditoria.
+          Frontend operador para workflows de bug bounty com IA assistida, escopo explicito,
+          aprovacao humana e trilha de auditoria.
         </p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="http://127.0.0.1:3000">Abrir console operador</a>
+          <a class="button button-secondary" href="/docs">Abrir API /docs</a>
+        </div>
       </header>
 
       <section class="grid">
         <article class="card">
-          <h2>1) Programa</h2>
-          <form id="program-form">
-            <label>Nome <input name="name" required /></label>
-            <label>Owner <input name="owner" required /></label>
-            <label>Descrição <textarea name="description"></textarea></label>
-            <label>Allowed domains (CSV) <input name="allowed_domains" placeholder="example.com,*.example.com" /></label>
-            <label>Denied domains (CSV) <input name="denied_domains" placeholder="admin.example.com" /></label>
-            <label>Forbidden techniques (CSV) <input name="forbidden_techniques" placeholder="sqlmap,payload_injection" /></label>
-            <button type="submit">Criar programa</button>
-          </form>
+          <div class="eyebrow">Primary frontend</div>
+          <h2>Use o app Next.js para demo</h2>
+          <p>
+            O console principal vive em <strong>http://127.0.0.1:3000</strong>. Ele expõe programas,
+            hypotheses, approvals, executions, findings e audit trail com linguagem visual consistente.
+          </p>
         </article>
 
         <article class="card">
-          <h2>2) Target</h2>
-          <form id="target-form">
-            <label>Program ID <input name="program_id" type="number" required /></label>
-            <label>Target <input name="identifier" required /></label>
-            <label>Tipo <input name="target_type" value="domain" required /></label>
-            <label>Criado por <input name="created_by" required /></label>
-            <button type="submit">Cadastrar target</button>
-          </form>
+          <div class="eyebrow">Backend surface</div>
+          <h2>Este endpoint agora e um launchpad</h2>
+          <p>
+            A antiga UI estatica de exercicio da API foi removida da entrada principal para nao parecer
+            o produto operador real durante demos ou avaliacao.
+          </p>
         </article>
 
         <article class="card">
-          <h2>3) Recon</h2>
-          <form id="recon-form">
-            <label>Target ID <input name="target_id" type="number" required /></label>
-            <label>Analista <input name="analyst" required /></label>
-            <button type="submit">Executar recon passivo</button>
-          </form>
-        </article>
-
-        <article class="card">
-          <h2>4) Hipótese</h2>
-          <form id="hypothesis-form">
-            <label>Target ID <input name="target_id" type="number" required /></label>
-            <label>Criado por <input name="created_by" required /></label>
-            <label>Título (opcional) <input name="title" /></label>
-            <label>Descrição (opcional) <textarea name="description"></textarea></label>
-            <label>Severidade <input name="severity" value="medium" /></label>
-            <label>Recon Record ID (opcional) <input name="recon_record_id" type="number" /></label>
-            <button type="submit">Criar hipótese</button>
-          </form>
-        </article>
-
-        <article class="card">
-          <h2>5) Aprovação</h2>
-          <form id="approval-request-form">
-            <label>Hypothesis ID <input name="hypothesis_id" type="number" required /></label>
-            <label>Solicitado por <input name="requested_by" required /></label>
-            <label>Justificativa <textarea name="rationale" required></textarea></label>
-            <button type="submit">Solicitar aprovação</button>
-          </form>
-          <hr />
-          <form id="approval-decision-form">
-            <label>Approval ID <input name="approval_id" type="number" required /></label>
-            <label>Status
-              <select name="status">
-                <option value="approved">approved</option>
-                <option value="rejected">rejected</option>
-              </select>
-            </label>
-            <label>Aprovador <input name="approver" required /></label>
-            <label>Papel do aprovador
-              <select name="approver_role">
-                <option value="analyst">analyst</option>
-                <option value="security_lead">security_lead</option>
-              </select>
-            </label>
-            <label>Motivo <textarea name="reason" required></textarea></label>
-            <button type="submit">Decidir aprovação</button>
-          </form>
-        </article>
-
-        <article class="card">
-          <h2>6) Execução</h2>
-          <form id="execution-request-form">
-            <label>Hypothesis ID <input name="hypothesis_id" type="number" required /></label>
-            <label>Solicitado por <input name="requested_by" required /></label>
-            <label>Plano de ação <textarea name="action_plan" required></textarea></label>
-            <label>Técnica <input name="technique" value="manual_verification" required /></label>
-            <label>Requests/min <input name="request_rate_per_minute" type="number" min="1" value="1" required /></label>
-            <label>Targets tocados <input name="target_count" type="number" min="1" value="1" required /></label>
-            <label><input name="state_changing" type="checkbox" /> altera estado</label>
-            <label><input name="requires_authentication" type="checkbox" /> usa autenticação</label>
-            <button type="submit">Solicitar execução</button>
-          </form>
-          <hr />
-          <form id="execution-dispatch-form">
-            <label>Operador <input name="operator" required /></label>
-            <button type="submit">Despachar próximo da fila</button>
-          </form>
-          <hr />
-          <form id="execution-complete-form">
-            <label>Execution ID <input name="execution_id" type="number" required /></label>
-            <label>Ator <input name="actor" required /></label>
-            <label>Resumo de saída <textarea name="output_summary" required></textarea></label>
-            <label>Evidência (texto) <textarea name="evidence_content" required></textarea></label>
-            <button type="submit">Concluir execução + gerar finding</button>
-          </form>
-          <p>Concluir só funciona após despacho manual e com pelo menos uma evidência registrada.</p>
-        </article>
-
-        <article class="card">
-          <h2>Consulta</h2>
-          <div class="actions">
-            <button id="load-programs">Programas</button>
-            <button id="load-targets">Targets (Program ID)</button>
-            <button id="load-hypotheses">Hipóteses</button>
-            <button id="load-approvals">Aprovações</button>
-            <button id="load-executions">Execuções</button>
-            <button id="load-findings">Findings</button>
-            <button id="load-audit">Auditoria</button>
-          </div>
-          <label>Program ID para targets <input id="program-id-query" type="number" /></label>
+          <div class="eyebrow">Security model</div>
+          <h2>Human-in-the-loop visivel</h2>
+          <p>
+            Scope, hypothesis, approval, execution, evidence e finding permanecem separados. Aprovacao
+            humana nao implica execucao automatica.
+          </p>
         </article>
       </section>
 
-      <section class="card output">
-        <h2>Saída</h2>
-        <pre id="output">{}</pre>
+      <section class="card workflow">
+        <div class="eyebrow">Workflow contract</div>
+        <h2>Fluxo operacional</h2>
+        <div class="workflow-grid">
+          <div class="workflow-step"><span>01</span><strong>Program</strong><p>Escopo explicito por programa.</p></div>
+          <div class="workflow-step"><span>02</span><strong>Target</strong><p>Validacao de escopo antes de qualquer hipotese.</p></div>
+          <div class="workflow-step"><span>03</span><strong>Hypothesis</strong><p>Inferencia assistida por IA, ainda nao executada.</p></div>
+          <div class="workflow-step"><span>04</span><strong>Approval</strong><p>Decisao humana duravel com identidade e motivo.</p></div>
+          <div class="workflow-step"><span>05</span><strong>Execution</strong><p>Request, queue, dispatch e completion separados.</p></div>
+          <div class="workflow-step"><span>06</span><strong>Finding</strong><p>Evidencia antes de narrativa.</p></div>
+        </div>
       </section>
     </main>
-
-    <script src="/static/app.js"></script>
   </body>
 </html>

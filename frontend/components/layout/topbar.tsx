@@ -10,6 +10,7 @@ const pageLabels: Record<string, string> = {
   "/programs": "Program inventory",
   "/hypotheses": "Hypothesis review",
   "/approvals": "Human approval workflow",
+  "/executions": "Execution control room",
   "/findings": "Findings and reports",
   "/audit": "Audit reconstruction",
 };

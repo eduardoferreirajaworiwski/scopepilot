@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { DefinitionList } from "@/components/shared/definition-list";
@@ -7,7 +8,7 @@ import { MetricCard } from "@/components/shared/metric-card";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/shared/states";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -227,6 +228,11 @@ export function ApprovalsPage() {
       <PageHeader
         title="Approval queue"
         description="This page is intentionally human-centered. It shows what the AI proposed, who requested review, what role is needed, and what decision the human reviewer made."
+        action={
+          <Link href="/executions" className={buttonVariants({ variant: "outline" })}>
+            Open executions
+          </Link>
+        }
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">

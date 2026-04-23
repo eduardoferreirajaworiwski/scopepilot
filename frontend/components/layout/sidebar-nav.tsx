@@ -31,16 +31,22 @@ const items = [
     glyph: "04",
   },
   {
+    href: "/executions",
+    label: "Executions",
+    description: "Queue, dispatch, and evidence",
+    glyph: "05",
+  },
+  {
     href: "/findings",
     label: "Findings / Reports",
     description: "Evidence and narrative outputs",
-    glyph: "05",
+    glyph: "06",
   },
   {
     href: "/audit",
     label: "Audit Trail",
     description: "Durable decision log",
-    glyph: "06",
+    glyph: "07",
   },
 ];
 

@@ -20,6 +20,17 @@ async function invalidateApprovalWorkflow(queryClient: QueryClient) {
   ]);
 }
 
+async function invalidateExecutionWorkflow(queryClient: QueryClient) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.executions }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.queue }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.hypotheses }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.findings }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.audit }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.evidenceStore }),
+  ]);
+}
+
 export function useHealthQuery() {
   return useQuery({
     queryKey: queryKeys.health,
@@ -209,6 +220,40 @@ export function useRejectApprovalMutation(approvalId: number) {
     mutationFn: (payload: Parameters<typeof api.rejectApproval>[1]) => api.rejectApproval(approvalId, payload),
     onSuccess: async () => {
       await invalidateApprovalWorkflow(queryClient);
+    },
+  });
+}
+
+export function useRequestExecutionMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: api.requestExecution,
+    onSuccess: async () => {
+      await invalidateExecutionWorkflow(queryClient);
+    },
+  });
+}
+
+export function useDispatchNextExecutionMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: api.dispatchNextExecution,
+    onSuccess: async () => {
+      await invalidateExecutionWorkflow(queryClient);
+    },
+  });
+}
+
+export function useCompleteExecutionMutation(executionId: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: Parameters<typeof api.completeExecution>[1]) =>
+      api.completeExecution(executionId, payload),
+    onSuccess: async () => {
+      await invalidateExecutionWorkflow(queryClient);
     },
   });
 }

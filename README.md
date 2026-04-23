@@ -14,6 +14,7 @@ Plataforma de apoio para programas autorizados de bug bounty com fluxo **human-i
 ## Arquitetura (FastAPI + SQLite + Pydantic + Next.js)
 - **Backend**: FastAPI.
 - **Frontend operador**: Next.js App Router + TypeScript + Tailwind CSS + shadcn/ui + React Query.
+- **Launchpad backend**: `app/frontend/` agora funciona como página de entrada controlada para apontar ao frontend principal e à documentação da API, sem confundir demo com exerciser técnico legado.
 - **Persistência**: SQLite + SQLAlchemy.
 - **Contratos**: Pydantic.
 - **Observabilidade**: logging estruturado em JSON.
@@ -96,14 +97,75 @@ npm run dev
 Frontend operador: `http://127.0.0.1:3000`  
 API FastAPI: `http://127.0.0.1:8000`  
 OpenAPI: `http://127.0.0.1:8000/docs`
+Launchpad backend: `http://127.0.0.1:8000/`
 
-Observação: o frontend legado estático em `app/frontend/` permanece no backend por compatibilidade durante esta fase. O frontend principal desta etapa está em `frontend/` e consome a API existente via `NEXT_PUBLIC_SCOPEPILOT_API_URL`.
+Observação: `app/frontend/` nao e mais a UI operador. Ele serve apenas como launchpad para evitar ambiguidade em demos. O frontend principal desta etapa esta em `frontend/` e consome a API existente via `NEXT_PUBLIC_SCOPEPILOT_API_URL`.
+
+## Demo frontend
+### Dataset profissional de demo
+Use um banco SQLite dedicado para demo, sem tocar no banco local padrao:
+
+```bash
+source .venv/bin/activate
+DATABASE_URL=sqlite:///./scopepilot_demo.db python scripts/seed_demo.py --reset
+```
+
+O seed cria um dataset coerente para entrevista, portfólio e screenshots:
+- 2 programas autorizados com politicas de escopo explicitas.
+- 5 targets, incluindo exemplos dentro e fora de escopo.
+- 5 hipoteses em estados diferentes.
+- 5 aprovacoes, incluindo `approved`, `pending` e `rejected`.
+- 3 execucoes, incluindo `completed`, `running` e `queued`.
+- 1 finding reportado com evidencia e report draft.
+- eventos de auditoria bloqueados e permitidos para mostrar fail-closed e human-in-the-loop.
+
+### Rodar a demo localmente
+Backend:
+
+```bash
+source .venv/bin/activate
+DATABASE_URL=sqlite:///./scopepilot_demo.db uvicorn app.main:app --reload
+```
+
+Frontend:
+
+```bash
+cd frontend
+cp .env.example .env.local
+npm install
+npm run dev
+```
+
+URLs:
+- Frontend operador: `http://127.0.0.1:3000`
+- Launchpad backend: `http://127.0.0.1:8000/`
+- API / docs: `http://127.0.0.1:8000/docs`
+
+### Walkthrough ideal em 60-90 segundos
+1. Abra o dashboard e destaque a trilha `program -> target -> hypothesis -> approval -> execution -> evidence -> finding`.
+2. Entre em `Programs` para mostrar escopo explicito e pelo menos um target fora de escopo.
+3. Entre em `Approvals` para mostrar uma fila pendente e um historico com decisao humana e rationale.
+4. Entre em `Executions` para mostrar `queued`, `running` e `completed` como estados separados, com dispatch manual e conclusao baseada em evidencia.
+5. Feche em `Findings` e `Audit Trail` para mostrar provenance, evidencia bruta, narrativa sintetizada e bloqueios auditaveis.
+
+### Screenshots e GIFs recomendados
+- Dashboard com os cards principais, o rail de workflow e o painel `75-second portfolio walkthrough`.
+- Programs mostrando uma politica de escopo forte e um target fora de escopo.
+- Approval Queue com uma aprovacao pendente e historico recente.
+- Execution Control Room com cards de `queued`, `running`, `completed` e o formulario de completion com evidencia.
+- Findings com evidencia bruta de um lado e narrativa/report draft do outro.
+- Audit Trail com um evento `blocked` e um evento `approved` ou `completed`.
+
+### Observacoes de demo
+- O seed foi desenhado para parecer produto, nao exerciser tecnico: os textos sao deliberadamente profissionais e os estados contam uma historia completa.
+- Se quiser resetar a demo, rode novamente `python scripts/seed_demo.py --reset` com o mesmo `DATABASE_URL`.
 
 ### Integração frontend/API
-- Fluxos integrados sem mock no frontend: listagem de programas, detalhe de programa, listagem de hipóteses, solicitação/aprovação/rejeição de aprovações, listagem de findings e trilha de auditoria.
+- Fluxos integrados sem mock no frontend: listagem de programas, detalhe de programa, listagem de hipóteses, solicitação/aprovação/rejeição de aprovações, request/dispatch/completion de execuções, listagem de findings e trilha de auditoria.
 - A tela de detalhe de programa usa um adapter temporário no client: ela resolve o programa a partir de `GET /api/programs`, porque o backend ainda não expõe `GET /api/programs/{id}`.
 - O fallback com mock não é usado nesses fluxos prioritários. O mock ainda existente é o adapter seguro/passivo de recon no backend, fora da navegação principal de aprovação e auditoria.
 - Mutations de aprovação invalidam aprovações, hipóteses, evidence store e auditoria para manter separação clara entre IA, decisão humana e execução.
+- Mutations de execução invalidam execuções, fila, hipóteses, findings, evidence store e auditoria para manter o estado operator-facing consistente durante demos e revisão.
 
 ## Endpoints principais
 - `POST /api/programs`

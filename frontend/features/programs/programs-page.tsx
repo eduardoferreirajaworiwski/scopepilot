@@ -71,6 +71,11 @@ export function ProgramsPage() {
       <PageHeader
         title="Authorized programs"
         description="Programs are the security boundary for everything else. This page keeps scope policy, ownership, and downstream activity visible without blending them into a generic dashboard."
+        action={
+          <Link href="/hypotheses" className={buttonVariants({ variant: "outline" })}>
+            Open hypotheses
+          </Link>
+        }
       />
 
       <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">

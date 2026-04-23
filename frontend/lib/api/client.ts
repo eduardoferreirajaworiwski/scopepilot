@@ -3,7 +3,10 @@ import type {
   ApprovalRead,
   ApprovalRequestInput,
   DecisionLogRead,
+  ExecutionCompleteInput,
+  ExecutionCompleteResponse,
   EvidenceStoreQueryResult,
+  ExecutionRequestInput,
   ExecutionRead,
   FindingRead,
   HealthResponse,
@@ -12,6 +15,7 @@ import type {
   ProgramCreateInput,
   ProgramScopePolicy,
   ProgramRead,
+  QueueDispatchInput,
   QueueSnapshot,
   TargetCreateInput,
   TargetRead,
@@ -238,7 +242,22 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   listExecutions: () => request<ExecutionRead[]>("/executions"),
+  requestExecution: (payload: ExecutionRequestInput) =>
+    request<ExecutionRead>("/executions", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   queueSnapshot: () => request<QueueSnapshot>("/executions/queue"),
+  dispatchNextExecution: (payload: QueueDispatchInput) =>
+    request<ExecutionRead>("/executions/queue/next", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  completeExecution: (executionId: number, payload: ExecutionCompleteInput) =>
+    request<ExecutionCompleteResponse>(`/executions/${executionId}/complete`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   listFindings: () => request<FindingRead[]>("/findings"),
   getProgramEvidenceStore: (programId: number) =>
     request<EvidenceStoreQueryResult>(`/evidence-store/programs/${programId}`),

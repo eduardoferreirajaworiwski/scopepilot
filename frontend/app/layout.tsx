@@ -5,8 +5,9 @@ import { AppShell } from "@/components/layout/app-shell";
 import { AppProviders } from "@/components/providers/app-providers";
 
 export const metadata: Metadata = {
-  title: "ScopePilot",
-  description: "Operator frontend for a human-in-the-loop bug bounty copilot.",
+  title: "ScopePilot | Human-in-the-loop security operations",
+  description:
+    "Operator console for authorized bug bounty workflows with explicit scope controls, human approval gates, evidence provenance, and auditability.",
 };
 
 export default function RootLayout({
@@ -24,4 +25,3 @@ export default function RootLayout({
     </html>
   );
 }
-

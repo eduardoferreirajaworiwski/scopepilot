@@ -94,6 +94,41 @@ export type ExecutionRead = {
   completed_at: string | null;
 };
 
+export type ExecutionRequestInput = {
+  hypothesis_id: number;
+  requested_by: string;
+  action_plan: string;
+  technique: string;
+  request_rate_per_minute: number;
+  target_count: number;
+  state_changing: boolean;
+  requires_authentication: boolean;
+};
+
+export type QueueDispatchInput = {
+  operator: string;
+};
+
+export type EvidenceInput = {
+  evidence_type: string;
+  content: string;
+  artifact_uri?: string | null;
+};
+
+export type FindingInput = {
+  title: string;
+  description: string;
+  severity: string;
+  status: FindingStatus;
+};
+
+export type ExecutionCompleteInput = {
+  actor: string;
+  output_summary: string;
+  evidence: EvidenceInput[];
+  finding?: FindingInput | null;
+};
+
 export type EvidenceRead = {
   id: number;
   program_id: number;
@@ -176,6 +211,12 @@ export type EvidenceStoreQueryResult = {
 
 export type QueueSnapshot = {
   queued_execution_ids: number[];
+};
+
+export type ExecutionCompleteResponse = {
+  execution: ExecutionRead;
+  finding: FindingRead;
+  evidence_count: number;
 };
 
 export type HealthResponse = {
