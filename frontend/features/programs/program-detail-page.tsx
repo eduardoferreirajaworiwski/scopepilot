@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { DefinitionList } from "@/components/shared/definition-list";
+import { MetricCard } from "@/components/shared/metric-card";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/shared/states";
@@ -163,7 +164,7 @@ export function ProgramDetailPage({ programId }: { programId: number }) {
                 },
               ]}
             />
-            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+            <div className="subpanel p-4">
               <div className="text-sm font-medium text-white">Forbidden techniques</div>
               <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
                 {program.scope_policy.forbidden_techniques.join(", ") || "No forbidden techniques declared yet."}
@@ -240,42 +241,30 @@ export function ProgramDetailPage({ programId }: { programId: number }) {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardHeader>
-            <p className="eyebrow">Targets</p>
-            <CardTitle>{targets.length}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-[var(--muted-foreground)]">
-            {formatRelativeCount(targets.filter((target) => target.in_scope).length, "in-scope asset")}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <p className="eyebrow">Hypotheses</p>
-            <CardTitle>{hypotheses.length}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-[var(--muted-foreground)]">
-            AI proposals currently tied to this program.
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <p className="eyebrow">Evidence items</p>
-            <CardTitle>{evidenceStore?.evidence.length ?? 0}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-[var(--muted-foreground)]">
-            Raw evidence entries linked through execution provenance.
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <p className="eyebrow">Report drafts</p>
-            <CardTitle>{evidenceStore?.report_drafts.length ?? 0}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-[var(--muted-foreground)]">
-            Narrative outputs are tracked separately from raw evidence.
-          </CardContent>
-        </Card>
+        <MetricCard
+          label="Targets"
+          value={String(targets.length)}
+          description={formatRelativeCount(targets.filter((target) => target.in_scope).length, "in-scope asset")}
+          tone="accent"
+        />
+        <MetricCard
+          label="Hypotheses"
+          value={String(hypotheses.length)}
+          description="AI proposals currently tied to this program."
+          tone="info"
+        />
+        <MetricCard
+          label="Evidence items"
+          value={String(evidenceStore?.evidence.length ?? 0)}
+          description="Raw evidence entries linked through execution provenance."
+          tone="success"
+        />
+        <MetricCard
+          label="Report drafts"
+          value={String(evidenceStore?.report_drafts.length ?? 0)}
+          description="Narrative outputs are tracked separately from raw evidence."
+          tone="neutral"
+        />
       </div>
 
       <Card>
@@ -343,7 +332,7 @@ export function ProgramDetailPage({ programId }: { programId: number }) {
                   const execution = getLatestExecutionForHypothesis(executions, hypothesis.id);
 
                   return (
-                    <div key={hypothesis.id} className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                    <div key={hypothesis.id} className="subpanel p-4">
                       <div className="flex flex-wrap items-center gap-2">
                         <StatusBadge status="draft" label="AI Hypothesis" />
                         <StatusBadge status={hypothesis.status} />
@@ -368,7 +357,7 @@ export function ProgramDetailPage({ programId }: { programId: number }) {
             <CardTitle>Program-level provenance</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+            <div className="subpanel p-4">
               <div className="text-sm font-medium text-white">Evidence vs inference</div>
               <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
                 Evidence items are stored separately from report drafts, and decision snapshots remain visible in the
@@ -439,4 +428,3 @@ export function ProgramDetailPage({ programId }: { programId: number }) {
     </div>
   );
 }
-

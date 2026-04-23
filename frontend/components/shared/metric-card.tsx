@@ -22,15 +22,16 @@ export function MetricCard({
   }[tone];
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="gap-4">
+    <Card className="metric-surface">
+      <CardHeader className="relative z-10 gap-4">
         <p className="eyebrow">{label}</p>
-        <CardTitle className={cn("text-3xl md:text-4xl", toneClass)}>{value}</CardTitle>
+        <CardTitle className={cn("text-4xl leading-none tracking-[-0.045em] md:text-5xl", toneClass)}>
+          {value}
+        </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="relative z-10">
         <p className="text-sm leading-6 text-[var(--muted-foreground)]">{description}</p>
       </CardContent>
     </Card>
   );
 }
-

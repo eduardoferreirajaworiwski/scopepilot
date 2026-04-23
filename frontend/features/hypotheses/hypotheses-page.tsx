@@ -47,12 +47,21 @@ function ApprovalRequestPanel({ hypothesisId }: { hypothesisId: number }) {
 
   return (
     <form
-      className="mt-4 space-y-3 rounded-[24px] border border-white/10 bg-white/[0.03] p-4"
+      className="decision-panel mt-4 space-y-3 p-4"
       onSubmit={(event) => {
         event.preventDefault();
         mutation.mutate(formState);
       }}
     >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-[var(--foreground-strong)]">Request human approval</div>
+          <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+            Creates a review record without starting execution.
+          </p>
+        </div>
+        <StatusBadge status="pending" label="Approval gate" />
+      </div>
       <div className="grid gap-3 md:grid-cols-[0.9fr_1.1fr]">
         <div className="space-y-2">
           <Label htmlFor={`requested-by-${hypothesisId}`}>Requested by</Label>
@@ -120,26 +129,26 @@ function HypothesisCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+        <div className="subpanel p-4">
           <div className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">AI inference</div>
           <p className="mt-2 text-sm leading-7 text-[var(--foreground)]">{hypothesis.description}</p>
         </div>
         <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+          <div className="subpanel p-4">
             <div className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Confidence</div>
             <div className="mt-2 text-lg font-semibold text-white">{formatConfidence(hypothesis.confidence)}</div>
           </div>
-          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+          <div className="subpanel p-4">
             <div className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Created</div>
             <div className="mt-2 text-sm font-medium text-white">{formatDateTime(hypothesis.created_at)}</div>
           </div>
-          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+          <div className="subpanel p-4">
             <div className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Suggested next step</div>
             <div className="mt-2 text-sm font-medium text-white">{hypothesis.suggested_next_step}</div>
           </div>
         </div>
         {approval ? (
-          <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+          <div className="subpanel p-4">
             <div className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Human decision state</div>
             <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
               {approval.approver
@@ -378,7 +387,7 @@ export function HypothesesPage() {
                 />
               </div>
             </div>
-            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-[var(--muted-foreground)]">
+            <div className="subpanel p-4 text-sm leading-6 text-[var(--muted-foreground)]">
               This queue is intentionally explicit: AI-generated content is labeled as hypothesis, approval remains a
               human decision, and execution is shown as a separate downstream state.
             </div>
@@ -415,4 +424,3 @@ export function HypothesesPage() {
     </div>
   );
 }
-

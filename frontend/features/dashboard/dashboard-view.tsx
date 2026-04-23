@@ -141,7 +141,7 @@ export function DashboardView() {
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 lg:grid-cols-3">
-            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+            <div className="subpanel-strong p-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-white">Approval queue</p>
                 <StatusBadge status={pendingApprovals.length > 0 ? "pending" : "approved"} />
@@ -154,7 +154,7 @@ export function DashboardView() {
                 Open approval queue
               </Link>
             </div>
-            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+            <div className="subpanel p-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-white">Execution queue</p>
                 <StatusBadge status={queuedExecutionIds.length > 0 ? "executed" : "draft"} label="Visible" />
@@ -173,7 +173,7 @@ export function DashboardView() {
                 )}
               </div>
             </div>
-            <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+            <div className="subpanel p-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-white">Execution activity</p>
                 <StatusBadge status={runningExecutions > 0 ? "running" : "approved"} />
@@ -232,7 +232,7 @@ export function DashboardView() {
                 const execution = executions.find((item) => item.hypothesis_id === hypothesis.id);
 
                 return (
-                  <div key={hypothesis.id} className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                  <div key={hypothesis.id} className="subpanel p-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusBadge status="draft" label="AI Hypothesis" />
                       <StatusBadge status={hypothesis.status} />
@@ -257,7 +257,7 @@ export function DashboardView() {
           </CardHeader>
           <CardContent className="space-y-3">
             {findings.slice(0, 4).map((finding) => (
-              <div key={finding.id} className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+              <div key={finding.id} className="subpanel p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge status="confirmed" />
                   <StatusBadge status={finding.status} />
@@ -318,4 +318,3 @@ export function DashboardView() {
     </div>
   );
 }
-

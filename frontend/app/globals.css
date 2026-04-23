@@ -1,23 +1,55 @@
 @import "tailwindcss";
 
 :root {
-  --background: #071019;
-  --foreground: #eef3f8;
-  --muted-foreground: #93a4b8;
-  --surface: rgba(12, 19, 29, 0.82);
-  --surface-strong: rgba(15, 24, 37, 0.94);
-  --surface-muted: rgba(255, 255, 255, 0.035);
-  --border: rgba(148, 163, 184, 0.18);
-  --border-strong: rgba(148, 163, 184, 0.3);
-  --accent: #5eead4;
-  --accent-foreground: #04231f;
-  --accent-soft: rgba(94, 234, 212, 0.14);
-  --success: #4ade80;
-  --warning: #fbbf24;
-  --danger: #fb7185;
-  --info: #60a5fa;
-  --radius: 1.5rem;
-  --shadow-panel: 0 20px 60px rgba(0, 0, 0, 0.32);
+  /* Core palette */
+  --background: #050a11;
+  --background-elevated: #08111c;
+  --foreground: #eef4f8;
+  --foreground-strong: #ffffff;
+  --muted-foreground: #91a2b5;
+  --subtle-foreground: #65758a;
+
+  /* Surfaces */
+  --surface: rgba(12, 20, 31, 0.82);
+  --surface-strong: rgba(14, 24, 38, 0.94);
+  --surface-raised: rgba(18, 30, 45, 0.92);
+  --surface-inset: rgba(255, 255, 255, 0.035);
+  --surface-hover: rgba(255, 255, 255, 0.06);
+  --surface-selected: rgba(104, 211, 192, 0.11);
+
+  /* Borders */
+  --border: rgba(151, 166, 185, 0.17);
+  --border-subtle: rgba(151, 166, 185, 0.1);
+  --border-strong: rgba(173, 188, 207, 0.28);
+  --border-accent: rgba(104, 211, 192, 0.36);
+
+  /* Brand and states */
+  --accent: #68d3c0;
+  --accent-hover: #85e5d5;
+  --accent-foreground: #041b19;
+  --accent-soft: rgba(104, 211, 192, 0.14);
+  --focus-ring: rgba(104, 211, 192, 0.18);
+  --success: #72e3a0;
+  --success-soft: rgba(114, 227, 160, 0.13);
+  --success-border: rgba(114, 227, 160, 0.34);
+  --warning: #f2c66d;
+  --warning-soft: rgba(242, 198, 109, 0.13);
+  --warning-border: rgba(242, 198, 109, 0.34);
+  --danger: #ff8a9a;
+  --danger-soft: rgba(255, 138, 154, 0.12);
+  --danger-border: rgba(255, 138, 154, 0.32);
+  --info: #79b8ff;
+  --info-soft: rgba(121, 184, 255, 0.13);
+  --info-border: rgba(121, 184, 255, 0.32);
+
+  /* Shape, spacing, depth */
+  --radius-sm: 0.875rem;
+  --radius-md: 1.125rem;
+  --radius-lg: 1.5rem;
+  --radius-xl: 1.75rem;
+  --shadow-panel: 0 22px 70px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  --shadow-soft: 0 14px 40px rgba(0, 0, 0, 0.22);
+  --shadow-button: 0 10px 26px rgba(104, 211, 192, 0.14);
 }
 
 * {
@@ -32,11 +64,15 @@ html {
 body {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(96, 165, 250, 0.1), transparent 28%),
-    radial-gradient(circle at top right, rgba(94, 234, 212, 0.08), transparent 24%),
-    linear-gradient(180deg, #09111a 0%, #060d15 44%, #04080e 100%);
+    radial-gradient(circle at 10% -10%, rgba(121, 184, 255, 0.13), transparent 34%),
+    radial-gradient(circle at 90% 0%, rgba(104, 211, 192, 0.1), transparent 30%),
+    linear-gradient(180deg, #08121d 0%, #060b13 48%, #03070c 100%);
   color: var(--foreground);
-  font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+  font-family: "IBM Plex Sans", "Aptos", "Avenir Next", "Segoe UI", sans-serif;
+  font-feature-settings:
+    "ss01" on,
+    "cv01" on;
+  text-rendering: geometricprecision;
 }
 
 body::before {
@@ -45,10 +81,10 @@ body::before {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(148, 163, 184, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.035) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.42), transparent 82%);
+    linear-gradient(rgba(151, 166, 185, 0.032) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(151, 166, 185, 0.032) 1px, transparent 1px);
+  background-size: 84px 84px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.5), transparent 78%);
 }
 
 code,
@@ -68,7 +104,7 @@ a {
 
 .panel {
   border: 1px solid var(--border);
-  border-radius: 28px;
+  border-radius: var(--radius-xl);
   background: var(--surface);
   backdrop-filter: blur(18px);
   box-shadow: var(--shadow-panel);
@@ -76,16 +112,29 @@ a {
 
 .panel-strong {
   border: 1px solid var(--border-strong);
-  border-radius: 28px;
+  border-radius: var(--radius-xl);
   background: var(--surface-strong);
   backdrop-filter: blur(20px);
   box-shadow: var(--shadow-panel);
 }
 
+.panel-interactive {
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.panel-interactive:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+
 .eyebrow {
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
+  font-weight: 700;
   color: var(--muted-foreground);
 }
 
@@ -102,3 +151,56 @@ a {
   background: linear-gradient(90deg, transparent, var(--border), transparent);
 }
 
+.subpanel {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.018)),
+    var(--surface-inset);
+}
+
+.subpanel-strong {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.026)),
+    rgba(13, 24, 38, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.metric-surface {
+  position: relative;
+  overflow: hidden;
+}
+
+.metric-surface::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(104, 211, 192, 0.08), transparent 38%),
+    radial-gradient(circle at 86% 12%, rgba(255, 255, 255, 0.08), transparent 22%);
+  opacity: 0.76;
+}
+
+.decision-panel {
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(135deg, rgba(242, 198, 109, 0.09), transparent 42%),
+    rgba(17, 24, 35, 0.76);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.table-shell {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: rgba(5, 10, 17, 0.26);
+}
+
+.status-dot {
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 14%, transparent);
+}

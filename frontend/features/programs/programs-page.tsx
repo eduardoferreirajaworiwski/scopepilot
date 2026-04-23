@@ -262,7 +262,7 @@ export function ProgramsPage() {
                     },
                   ]}
                 />
-                <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                <div className="subpanel p-4">
                   <div className="text-sm font-medium text-white">Workflow activity</div>
                   <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
                     {formatRelativeCount(relatedHypotheses.length, "hypothesis")} currently reference this program.
@@ -281,4 +281,3 @@ export function ProgramsPage() {
     </div>
   );
 }
-

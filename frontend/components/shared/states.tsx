@@ -43,7 +43,7 @@ export function ErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <Card className="border-rose-500/20">
+    <Card className="border-[var(--danger-border)]">
       <CardHeader>
         <p className="eyebrow text-rose-200">Request failed</p>
         <CardTitle>{title}</CardTitle>
@@ -70,7 +70,7 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <Card className="fine-grid">
+    <Card className="fine-grid border-[var(--border-subtle)]">
       <CardHeader>
         <p className="eyebrow">Nothing to review yet</p>
         <CardTitle>{title}</CardTitle>
@@ -82,4 +82,3 @@ export function EmptyState({
     </Card>
   );
 }
-

@@ -107,7 +107,9 @@ export function FindingsPage() {
                   type="button"
                   onClick={() => setSelectedFindingId(finding.id)}
                   className={`w-full rounded-[24px] border p-4 text-left transition-colors ${
-                    active ? "border-white/15 bg-white/[0.07]" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]"
+                    active
+                      ? "border-[var(--border-accent)] bg-[var(--surface-selected)]"
+                      : "border-[var(--border-subtle)] bg-[var(--surface-inset)] hover:bg-[var(--surface-hover)]"
                   }`}
                 >
                   <div className="flex flex-wrap items-center gap-2">
@@ -194,7 +196,7 @@ export function FindingsPage() {
                       <CardContent className="space-y-3">
                         {selectedStore?.evidence.length ? (
                           selectedStore.evidence.map((record) => (
-                            <div key={record.id} className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                            <div key={record.id} className="subpanel p-4">
                               <div className="flex flex-wrap items-center gap-2">
                                 <StatusBadge status="confirmed" label={record.evidence_type} />
                                 <span className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
@@ -218,7 +220,7 @@ export function FindingsPage() {
                         <CardTitle>Synthesized narrative</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
-                        <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                        <div className="subpanel p-4">
                           <div className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
                             Finding description
                           </div>
@@ -226,7 +228,7 @@ export function FindingsPage() {
                         </div>
                         {selectedStore?.report_drafts.length ? (
                           selectedStore.report_drafts.map((draft) => (
-                            <div key={draft.id} className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                            <div key={draft.id} className="subpanel p-4">
                               <div className="flex flex-wrap items-center gap-2">
                                 <StatusBadge status={draft.status} />
                                 <span className="text-sm font-medium text-white">{draft.title}</span>
@@ -282,4 +284,3 @@ export function FindingsPage() {
     </div>
   );
 }
-

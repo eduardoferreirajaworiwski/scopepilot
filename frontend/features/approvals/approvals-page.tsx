@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { DefinitionList } from "@/components/shared/definition-list";
+import { MetricCard } from "@/components/shared/metric-card";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/shared/states";
@@ -62,7 +63,16 @@ function DecisionForm({ approval }: { approval: ApprovalRead }) {
   });
 
   return (
-    <div className="mt-4 rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+    <div className="decision-panel mt-4 p-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold text-[var(--foreground-strong)]">Record human decision</div>
+          <p className="mt-1 text-sm text-[var(--muted-foreground)]">
+            Approval and rejection both require reviewer identity and rationale.
+          </p>
+        </div>
+        <StatusBadge status="pending" label="Decision gate" />
+      </div>
       <div className="grid gap-4 md:grid-cols-[0.8fr_0.8fr_1.2fr]">
         <div className="space-y-2">
           <Label htmlFor={`approver-${approval.id}`}>Approver</Label>
@@ -193,42 +203,30 @@ export function ApprovalsPage() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardHeader>
-            <p className="eyebrow">Pending approvals</p>
-            <CardTitle>{pendingApprovals.length}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-[var(--muted-foreground)]">
-            Requests currently blocked until a human decision is recorded.
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <p className="eyebrow">Approved decisions</p>
-            <CardTitle>{approvals.filter((approval) => approval.status === "approved").length}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-[var(--muted-foreground)]">
-            Human approvals already issued in the current dataset.
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <p className="eyebrow">Queued executions</p>
-            <CardTitle>{queuedExecutionIds.length}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-[var(--muted-foreground)]">
-            Executions are still visible separately from the approval state.
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <p className="eyebrow">Running executions</p>
-            <CardTitle>{executions.filter((execution) => execution.status === "running").length}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-[var(--muted-foreground)]">
-            Manual dispatch is required before execution moves into running state.
-          </CardContent>
-        </Card>
+        <MetricCard
+          label="Pending approvals"
+          value={String(pendingApprovals.length)}
+          description="Requests currently blocked until a human decision is recorded."
+          tone={pendingApprovals.length > 0 ? "warning" : "success"}
+        />
+        <MetricCard
+          label="Approved decisions"
+          value={String(approvals.filter((approval) => approval.status === "approved").length)}
+          description="Human approvals already issued in the current dataset."
+          tone="success"
+        />
+        <MetricCard
+          label="Queued executions"
+          value={String(queuedExecutionIds.length)}
+          description="Executions are still visible separately from the approval state."
+          tone="info"
+        />
+        <MetricCard
+          label="Running executions"
+          value={String(executions.filter((execution) => execution.status === "running").length)}
+          description="Manual dispatch is required before execution moves into running state."
+          tone="accent"
+        />
       </div>
 
       {pendingApprovals.length === 0 ? (
@@ -270,13 +268,13 @@ export function ApprovalsPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
-                  <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                  <div className="subpanel p-4">
                     <div className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
                       AI hypothesis / inference
                     </div>
                     <p className="mt-2 text-sm leading-7 text-white">{hypothesis.description}</p>
                   </div>
-                  <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                  <div className="subpanel p-4">
                     <div className="text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
                       Approval request
                     </div>
@@ -366,4 +364,3 @@ export function ApprovalsPage() {
     </div>
   );
 }
-

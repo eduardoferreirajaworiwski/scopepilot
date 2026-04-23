@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
-    <div className="w-full overflow-x-auto">
+    <div className="table-shell">
       <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
     </div>
   ),
@@ -12,7 +12,9 @@ const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableE
 Table.displayName = "Table";
 
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
-  ({ className, ...props }, ref) => <thead ref={ref} className={cn("[&_tr]:border-b [&_tr]:border-white/10", className)} {...props} />,
+  ({ className, ...props }, ref) => (
+    <thead ref={ref} className={cn("bg-white/[0.035] [&_tr]:border-b [&_tr]:border-[var(--border-subtle)]", className)} {...props} />
+  ),
 );
 TableHeader.displayName = "TableHeader";
 
@@ -25,7 +27,7 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
   ({ className, ...props }, ref) => (
     <tr
       ref={ref}
-      className={cn("border-b border-white/10 transition-colors hover:bg-white/[0.025]", className)}
+      className={cn("border-b border-[var(--border-subtle)] transition-colors hover:bg-white/[0.035]", className)}
       {...props}
     />
   ),
@@ -37,7 +39,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
     <th
       ref={ref}
       className={cn(
-        "h-12 px-4 text-left text-xs font-medium uppercase tracking-[0.16em] text-[var(--muted-foreground)]",
+        "h-12 px-4 text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]",
         className,
       )}
       {...props}
@@ -47,9 +49,8 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
 TableHead.displayName = "TableHead";
 
 const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(
-  ({ className, ...props }, ref) => <td ref={ref} className={cn("px-4 py-4 align-top", className)} {...props} />,
+  ({ className, ...props }, ref) => <td ref={ref} className={cn("px-4 py-4 align-top text-[var(--foreground)]", className)} {...props} />,
 );
 TableCell.displayName = "TableCell";
 
 export { Table, TableBody, TableCell, TableHead, TableHeader, TableRow };
-

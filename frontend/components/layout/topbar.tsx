@@ -30,14 +30,14 @@ export function Topbar() {
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="eyebrow">ScopePilot</p>
-          <div className="mt-1 text-lg font-semibold text-white">{section}</div>
+          <div className="mt-1 text-lg font-semibold tracking-[-0.02em] text-[var(--foreground-strong)]">{section}</div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <StatusBadge
             status={healthy ? "approved" : "pending"}
             label={healthy ? "API Connected" : healthQuery.isPending ? "Checking API" : "API Unreachable"}
           />
-          <div className="rounded-full border border-white/10 px-4 py-2 text-xs uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
+          <div className="rounded-full border border-[var(--border-subtle)] bg-white/[0.035] px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
             Human-in-the-loop enforced
           </div>
         </div>
@@ -45,4 +45,3 @@ export function Topbar() {
     </header>
   );
 }
-

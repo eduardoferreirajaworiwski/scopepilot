@@ -4,16 +4,19 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-full text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 rounded-full text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:pointer-events-none disabled:opacity-45",
   {
     variants: {
       variant: {
-        default: "bg-[var(--accent)] px-4 py-2 text-[var(--accent-foreground)] hover:brightness-105",
-        secondary: "bg-white/[0.06] px-4 py-2 text-[var(--foreground)] hover:bg-white/[0.1]",
+        default:
+          "bg-[var(--accent)] px-4 py-2 text-[var(--accent-foreground)] shadow-[var(--shadow-button)] hover:bg-[var(--accent-hover)]",
+        secondary:
+          "border border-[var(--border-subtle)] bg-white/[0.06] px-4 py-2 text-[var(--foreground)] hover:border-[var(--border)] hover:bg-white/[0.1]",
         outline:
-          "border border-white/10 bg-transparent px-4 py-2 text-[var(--foreground)] hover:bg-white/[0.04]",
-        ghost: "px-3 py-2 text-[var(--foreground)] hover:bg-white/[0.05]",
-        danger: "bg-[var(--danger)] px-4 py-2 text-slate-950 hover:brightness-105",
+          "border border-[var(--border)] bg-transparent px-4 py-2 text-[var(--foreground)] hover:border-[var(--border-strong)] hover:bg-white/[0.045]",
+        ghost: "px-3 py-2 text-[var(--foreground)] hover:bg-white/[0.055]",
+        danger:
+          "border border-[var(--danger-border)] bg-[var(--danger-soft)] px-4 py-2 text-rose-100 hover:bg-rose-500/20",
       },
       size: {
         default: "h-10",
@@ -40,4 +43,3 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 Button.displayName = "Button";
 
 export { Button, buttonVariants };
-

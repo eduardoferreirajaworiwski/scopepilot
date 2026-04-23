@@ -6,7 +6,7 @@ const Label = React.forwardRef<HTMLLabelElement, React.ComponentProps<"label">>(
   return (
     <label
       ref={ref}
-      className={cn("text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]", className)}
+      className={cn("text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]", className)}
       {...props}
     />
   );
@@ -14,4 +14,3 @@ const Label = React.forwardRef<HTMLLabelElement, React.ComponentProps<"label">>(
 Label.displayName = "Label";
 
 export { Label };
-

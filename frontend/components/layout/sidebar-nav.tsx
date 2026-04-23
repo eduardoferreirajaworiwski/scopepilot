@@ -58,22 +58,24 @@ export function SidebarNav({ mobile = false }: { mobile?: boolean }) {
             key={item.href}
             href={item.href}
             className={cn(
-              "group flex shrink-0 items-start gap-4 rounded-[24px] border px-4 py-4 transition-colors",
+              "group flex shrink-0 items-start gap-4 rounded-[22px] border px-4 py-4 transition-colors",
               active
-                ? "border-white/15 bg-white/[0.07]"
-                : "border-transparent bg-transparent hover:border-white/10 hover:bg-white/[0.04]",
+                ? "border-[var(--border-accent)] bg-[var(--surface-selected)]"
+                : "border-transparent bg-transparent hover:border-[var(--border-subtle)] hover:bg-white/[0.04]",
             )}
           >
             <div
               className={cn(
-                "flex h-10 w-10 items-center justify-center rounded-2xl text-xs font-semibold tracking-[0.2em]",
-                active ? "bg-[var(--accent)] text-[var(--accent-foreground)]" : "bg-white/[0.06] text-white/80",
+                "flex h-10 w-10 items-center justify-center rounded-2xl text-xs font-bold tracking-[0.2em]",
+                active
+                  ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
+                  : "border border-[var(--border-subtle)] bg-white/[0.045] text-white/75",
               )}
             >
               {item.glyph}
             </div>
             <div className="min-w-0">
-              <div className="text-sm font-medium text-white">{item.label}</div>
+              <div className="text-sm font-semibold text-[var(--foreground-strong)]">{item.label}</div>
               <div className="mt-1 text-xs leading-5 text-[var(--muted-foreground)]">{item.description}</div>
             </div>
           </Link>
@@ -82,4 +84,3 @@ export function SidebarNav({ mobile = false }: { mobile?: boolean }) {
     </nav>
   );
 }
-

@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { humanizeToken } from "@/lib/format";
 
 const variants = {
+  // Workflow states
   pending: "warning",
   pending_approval: "warning",
   approved: "success",
@@ -17,6 +18,18 @@ const variants = {
   new: "neutral",
   reported: "info",
   closed: "neutral",
+
+  // Generic tones and severity labels used by pages.
+  neutral: "neutral",
+  success: "success",
+  warning: "warning",
+  danger: "danger",
+  info: "info",
+  accent: "accent",
+  low: "neutral",
+  medium: "warning",
+  high: "danger",
+  critical: "danger",
 } as const;
 
 export function StatusBadge({
@@ -30,4 +43,3 @@ export function StatusBadge({
 
   return <Badge variant={variant}>{label ?? humanizeToken(status)}</Badge>;
 }
-
