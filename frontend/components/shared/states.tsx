@@ -37,22 +37,24 @@ export function ErrorState({
   title,
   description,
   onRetry,
+  retryLabel = "Try again",
 }: {
   title: string;
   description: string;
   onRetry?: () => void;
+  retryLabel?: string;
 }) {
   return (
-    <Card className="border-[var(--danger-border)]">
+    <Card className="border-[var(--danger-border)]" role="alert">
       <CardHeader>
-        <p className="eyebrow text-rose-200">Request failed</p>
+        <p className="eyebrow text-rose-200">API request failed</p>
         <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm leading-6 text-[var(--muted-foreground)]">{description}</p>
         {onRetry ? (
           <Button variant="outline" onClick={onRetry}>
-            Retry
+            {retryLabel}
           </Button>
         ) : null}
       </CardContent>

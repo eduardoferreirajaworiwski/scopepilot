@@ -1,6 +1,5 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDeferredValue, useState } from "react";
 
 import { PageHeader } from "@/components/shared/page-header";
@@ -12,45 +11,36 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { api, getApiErrorMessage } from "@/lib/api/client";
-import { queryKeys } from "@/lib/api/query-keys";
+import { getApiErrorMessage } from "@/lib/api/client";
 import {
   useAllTargetsQuery,
   useApprovalsQuery,
+  useCreateHypothesisMutation,
   useExecutionsQuery,
   useHypothesesQuery,
   useProgramsQuery,
+  useRequestApprovalMutation,
 } from "@/lib/api/hooks";
 import { formatConfidence, formatDateTime, humanizeToken } from "@/lib/format";
 import { findProgram, findTarget, getLatestApprovalForHypothesis, getLatestExecutionForHypothesis } from "@/lib/selectors";
 import type { ApprovalRead, HypothesisRead, ProgramRead, TargetRead } from "@/lib/types/api";
 
 function ApprovalRequestPanel({ hypothesisId }: { hypothesisId: number }) {
-  const queryClient = useQueryClient();
   const [formState, setFormState] = useState({
     requested_by: "",
     rationale: "",
   });
 
-  const mutation = useMutation({
-    mutationFn: (payload: { requested_by: string; rationale: string }) => api.requestApproval(hypothesisId, payload),
-    onSuccess: async () => {
-      setFormState({ requested_by: "", rationale: "" });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.approvals }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.pendingApprovals }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.hypotheses }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.audit }),
-      ]);
-    },
-  });
+  const mutation = useRequestApprovalMutation(hypothesisId);
 
   return (
     <form
       className="decision-panel mt-4 space-y-3 p-4"
       onSubmit={(event) => {
         event.preventDefault();
-        mutation.mutate(formState);
+        mutation.mutate(formState, {
+          onSuccess: () => setFormState({ requested_by: "", rationale: "" }),
+        });
       }}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -164,7 +154,6 @@ function HypothesisCard({
 }
 
 export function HypothesesPage() {
-  const queryClient = useQueryClient();
   const programsQuery = useProgramsQuery();
   const targetsRegistry = useAllTargetsQuery(programsQuery.data ?? []);
   const hypothesesQuery = useHypothesesQuery();
@@ -182,23 +171,7 @@ export function HypothesesPage() {
     severity: "medium",
   });
 
-  const createHypothesisMutation = useMutation({
-    mutationFn: api.createHypothesis,
-    onSuccess: async () => {
-      setFormState({
-        target_id: "",
-        created_by: "",
-        title: "",
-        description: "",
-        severity: "medium",
-      });
-
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.hypotheses }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.audit }),
-      ]);
-    },
-  });
+  const createHypothesisMutation = useCreateHypothesisMutation();
 
   if (
     programsQuery.isPending ||
@@ -232,6 +205,15 @@ export function HypothesesPage() {
             executionsQuery.error ??
             targetsRegistry.error,
         )}
+        onRetry={() => {
+          void Promise.all([
+            programsQuery.refetch(),
+            hypothesesQuery.refetch(),
+            approvalsQuery.refetch(),
+            executionsQuery.refetch(),
+            targetsRegistry.refetch(),
+          ]);
+        }}
       />
     );
   }
@@ -271,13 +253,26 @@ export function HypothesesPage() {
               className="space-y-4"
               onSubmit={(event) => {
                 event.preventDefault();
-                createHypothesisMutation.mutate({
-                  target_id: Number(formState.target_id),
-                  created_by: formState.created_by,
-                  title: formState.title || null,
-                  description: formState.description || null,
-                  severity: formState.severity,
-                });
+                createHypothesisMutation.mutate(
+                  {
+                    target_id: Number(formState.target_id),
+                    created_by: formState.created_by,
+                    title: formState.title || null,
+                    description: formState.description || null,
+                    severity: formState.severity,
+                  },
+                  {
+                    onSuccess: () => {
+                      setFormState({
+                        target_id: "",
+                        created_by: "",
+                        title: "",
+                        description: "",
+                        severity: "medium",
+                      });
+                    },
+                  },
+                );
               }}
             >
               <div className="space-y-2">

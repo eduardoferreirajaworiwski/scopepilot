@@ -1,6 +1,7 @@
 export const queryKeys = {
   health: ["health"] as const,
   programs: ["programs"] as const,
+  program: (programId: number) => ["programs", "detail", programId] as const,
   programTargets: (programId: number) => ["programs", programId, "targets"] as const,
   hypotheses: ["hypotheses"] as const,
   approvals: ["approvals"] as const,
@@ -8,8 +9,8 @@ export const queryKeys = {
   executions: ["executions"] as const,
   queue: ["executions", "queue"] as const,
   findings: ["findings"] as const,
+  evidenceStore: ["evidence-store"] as const,
   programEvidence: (programId: number) => ["evidence-store", "program", programId] as const,
   findingEvidence: (findingId: number) => ["evidence-store", "finding", findingId] as const,
   audit: ["audit", "decisions"] as const,
 };
-

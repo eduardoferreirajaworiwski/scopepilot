@@ -1,10 +1,24 @@
 "use client";
 
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api/client";
 import { queryKeys } from "@/lib/api/query-keys";
 import type { ProgramRead } from "@/lib/types/api";
+
+function isValidId(value: number) {
+  return Number.isInteger(value) && value > 0;
+}
+
+async function invalidateApprovalWorkflow(queryClient: QueryClient) {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: queryKeys.approvals }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.pendingApprovals }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.hypotheses }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.audit }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.evidenceStore }),
+  ]);
+}
 
 export function useHealthQuery() {
   return useQuery({
@@ -20,11 +34,19 @@ export function useProgramsQuery() {
   });
 }
 
+export function useProgramQuery(programId: number) {
+  return useQuery({
+    queryKey: queryKeys.program(programId),
+    queryFn: () => api.getProgram(programId),
+    enabled: isValidId(programId),
+  });
+}
+
 export function useProgramTargetsQuery(programId: number) {
   return useQuery({
     queryKey: queryKeys.programTargets(programId),
     queryFn: () => api.listProgramTargets(programId),
-    enabled: Number.isFinite(programId),
+    enabled: isValidId(programId),
   });
 }
 
@@ -33,7 +55,7 @@ export function useAllTargetsQuery(programs: ProgramRead[]) {
     queries: programs.map((program) => ({
       queryKey: queryKeys.programTargets(program.id),
       queryFn: () => api.listProgramTargets(program.id),
-      enabled: programs.length > 0,
+      enabled: isValidId(program.id),
     })),
   });
 
@@ -42,6 +64,7 @@ export function useAllTargetsQuery(programs: ProgramRead[]) {
     isPending: queries.some((query) => query.isPending),
     isError: queries.some((query) => query.isError),
     error: queries.find((query) => query.error)?.error ?? null,
+    refetch: () => Promise.all(queries.map((query) => query.refetch())),
   };
 }
 
@@ -91,7 +114,7 @@ export function useProgramEvidenceStoreQuery(programId: number) {
   return useQuery({
     queryKey: queryKeys.programEvidence(programId),
     queryFn: () => api.getProgramEvidenceStore(programId),
-    enabled: Number.isFinite(programId),
+    enabled: isValidId(programId),
   });
 }
 
@@ -99,7 +122,7 @@ export function useFindingEvidenceStoreQuery(findingId: number | null) {
   return useQuery({
     queryKey: queryKeys.findingEvidence(findingId ?? 0),
     queryFn: () => api.getFindingEvidenceStore(findingId ?? 0),
-    enabled: typeof findingId === "number",
+    enabled: typeof findingId === "number" && isValidId(findingId),
   });
 }
 
@@ -110,3 +133,82 @@ export function useAuditTrailQuery() {
   });
 }
 
+export function useCreateProgramMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: api.createProgram,
+    onSuccess: async (program) => {
+      queryClient.setQueryData(queryKeys.program(program.id), program);
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.programs }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.audit }),
+      ]);
+    },
+  });
+}
+
+export function useCreateTargetMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: api.createTarget,
+    onSuccess: async (target) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.programTargets(target.program_id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.program(target.program_id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.audit }),
+      ]);
+    },
+  });
+}
+
+export function useCreateHypothesisMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: api.createHypothesis,
+    onSuccess: async (hypothesis) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.hypotheses }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.program(hypothesis.program_id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.programEvidence(hypothesis.program_id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.audit }),
+      ]);
+    },
+  });
+}
+
+export function useRequestApprovalMutation(hypothesisId: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: Parameters<typeof api.requestApproval>[1]) => api.requestApproval(hypothesisId, payload),
+    onSuccess: async () => {
+      await invalidateApprovalWorkflow(queryClient);
+    },
+  });
+}
+
+export function useApproveApprovalMutation(approvalId: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: Parameters<typeof api.approveApproval>[1]) => api.approveApproval(approvalId, payload),
+    onSuccess: async () => {
+      await invalidateApprovalWorkflow(queryClient);
+    },
+  });
+}
+
+export function useRejectApprovalMutation(approvalId: number) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (payload: Parameters<typeof api.rejectApproval>[1]) => api.rejectApproval(approvalId, payload),
+    onSuccess: async () => {
+      await invalidateApprovalWorkflow(queryClient);
+    },
+  });
+}

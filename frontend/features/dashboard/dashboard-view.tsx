@@ -12,6 +12,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDateTime, formatRelativeCount } from "@/lib/format";
+import { getApiErrorMessage } from "@/lib/api/client";
 import {
   useApprovalsQuery,
   useAuditTrailQuery,
@@ -61,7 +62,7 @@ export function DashboardView() {
     return (
       <ErrorState
         title="Dashboard data could not be loaded"
-        description={criticalQuery.error instanceof Error ? criticalQuery.error.message : "Unexpected query failure."}
+        description={getApiErrorMessage(criticalQuery.error)}
         onRetry={() => {
           void Promise.all([
             programsQuery.refetch(),

@@ -1,6 +1,5 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -14,22 +13,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { api, getApiErrorMessage } from "@/lib/api/client";
-import { queryKeys } from "@/lib/api/query-keys";
+import { getApiErrorMessage } from "@/lib/api/client";
 import {
   useApprovalsQuery,
+  useCreateTargetMutation,
   useExecutionsQuery,
   useHypothesesQuery,
+  useProgramQuery,
   useProgramEvidenceStoreQuery,
-  useProgramsQuery,
   useProgramTargetsQuery,
 } from "@/lib/api/hooks";
 import { formatDateTime, formatRelativeCount } from "@/lib/format";
-import { filterHypothesesByProgram, findProgram, getLatestApprovalForHypothesis, getLatestExecutionForHypothesis } from "@/lib/selectors";
+import { filterHypothesesByProgram, getLatestApprovalForHypothesis, getLatestExecutionForHypothesis } from "@/lib/selectors";
 
 export function ProgramDetailPage({ programId }: { programId: number }) {
-  const queryClient = useQueryClient();
-  const programsQuery = useProgramsQuery();
+  const invalidProgramId = !Number.isInteger(programId) || programId <= 0;
+  const programQuery = useProgramQuery(programId);
   const targetsQuery = useProgramTargetsQuery(programId);
   const hypothesesQuery = useHypothesesQuery();
   const approvalsQuery = useApprovalsQuery();
@@ -42,24 +41,19 @@ export function ProgramDetailPage({ programId }: { programId: number }) {
     created_by: "",
   });
 
-  const createTargetMutation = useMutation({
-    mutationFn: api.createTarget,
-    onSuccess: async () => {
-      setTargetForm({
-        identifier: "",
-        target_type: "",
-        created_by: "",
-      });
+  const createTargetMutation = useCreateTargetMutation();
 
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.programTargets(programId) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.audit }),
-      ]);
-    },
-  });
+  if (invalidProgramId) {
+    return (
+      <ErrorState
+        title="Program id is invalid"
+        description="Open a program using a positive numeric id from the authorized programs list."
+      />
+    );
+  }
 
   if (
-    programsQuery.isPending ||
+    programQuery.isPending ||
     targetsQuery.isPending ||
     hypothesesQuery.isPending ||
     approvalsQuery.isPending ||
@@ -75,7 +69,7 @@ export function ProgramDetailPage({ programId }: { programId: number }) {
   }
 
   if (
-    programsQuery.error ||
+    programQuery.error ||
     targetsQuery.error ||
     hypothesesQuery.error ||
     approvalsQuery.error ||
@@ -86,7 +80,7 @@ export function ProgramDetailPage({ programId }: { programId: number }) {
       <ErrorState
         title="Program detail could not be loaded"
         description={getApiErrorMessage(
-          programsQuery.error ??
+          programQuery.error ??
             targetsQuery.error ??
             hypothesesQuery.error ??
             approvalsQuery.error ??
@@ -95,7 +89,7 @@ export function ProgramDetailPage({ programId }: { programId: number }) {
         )}
         onRetry={() => {
           void Promise.all([
-            programsQuery.refetch(),
+            programQuery.refetch(),
             targetsQuery.refetch(),
             hypothesesQuery.refetch(),
             approvalsQuery.refetch(),
@@ -107,7 +101,7 @@ export function ProgramDetailPage({ programId }: { programId: number }) {
     );
   }
 
-  const program = findProgram(programsQuery.data ?? [], programId);
+  const program = programQuery.data ?? null;
   if (!program) {
     return (
       <ErrorState
@@ -186,12 +180,23 @@ export function ProgramDetailPage({ programId }: { programId: number }) {
               className="space-y-4"
               onSubmit={(event) => {
                 event.preventDefault();
-                createTargetMutation.mutate({
-                  program_id: program.id,
-                  identifier: targetForm.identifier,
-                  target_type: targetForm.target_type,
-                  created_by: targetForm.created_by,
-                });
+                createTargetMutation.mutate(
+                  {
+                    program_id: program.id,
+                    identifier: targetForm.identifier,
+                    target_type: targetForm.target_type,
+                    created_by: targetForm.created_by,
+                  },
+                  {
+                    onSuccess: () => {
+                      setTargetForm({
+                        identifier: "",
+                        target_type: "",
+                        created_by: "",
+                      });
+                    },
+                  },
+                );
               }}
             >
               <div className="grid gap-4 md:grid-cols-2">

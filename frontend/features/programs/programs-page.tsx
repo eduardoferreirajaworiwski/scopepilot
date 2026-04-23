@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { DefinitionList } from "@/components/shared/definition-list";
@@ -13,9 +12,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { api, getApiErrorMessage } from "@/lib/api/client";
-import { queryKeys } from "@/lib/api/query-keys";
-import { useFindingsQuery, useHypothesesQuery, useProgramsQuery } from "@/lib/api/hooks";
+import { getApiErrorMessage } from "@/lib/api/client";
+import { useCreateProgramMutation, useFindingsQuery, useHypothesesQuery, useProgramsQuery } from "@/lib/api/hooks";
 import { formatDateTime, formatRelativeCount } from "@/lib/format";
 
 function csvToList(value: string) {
@@ -26,7 +24,6 @@ function csvToList(value: string) {
 }
 
 export function ProgramsPage() {
-  const queryClient = useQueryClient();
   const programsQuery = useProgramsQuery();
   const hypothesesQuery = useHypothesesQuery();
   const findingsQuery = useFindingsQuery();
@@ -40,24 +37,7 @@ export function ProgramsPage() {
     forbidden_techniques: "",
   });
 
-  const createProgramMutation = useMutation({
-    mutationFn: api.createProgram,
-    onSuccess: async () => {
-      setFormState({
-        name: "",
-        owner: "",
-        description: "",
-        allowed_domains: "",
-        denied_domains: "",
-        forbidden_techniques: "",
-      });
-
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.programs }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.audit }),
-      ]);
-    },
-  });
+  const createProgramMutation = useCreateProgramMutation();
 
   if (programsQuery.isPending || hypothesesQuery.isPending || findingsQuery.isPending) {
     return (
@@ -68,12 +48,16 @@ export function ProgramsPage() {
     );
   }
 
-  if (programsQuery.error) {
+  const pageError = programsQuery.error ?? hypothesesQuery.error ?? findingsQuery.error;
+
+  if (pageError) {
     return (
       <ErrorState
         title="Programs could not be loaded"
-        description={getApiErrorMessage(programsQuery.error)}
-        onRetry={() => void programsQuery.refetch()}
+        description={getApiErrorMessage(pageError)}
+        onRetry={() => {
+          void Promise.all([programsQuery.refetch(), hypothesesQuery.refetch(), findingsQuery.refetch()]);
+        }}
       />
     );
   }
@@ -103,16 +87,30 @@ export function ProgramsPage() {
               className="space-y-4"
               onSubmit={(event) => {
                 event.preventDefault();
-                createProgramMutation.mutate({
-                  name: formState.name,
-                  owner: formState.owner,
-                  description: formState.description,
-                  scope_policy: {
-                    allowed_domains: csvToList(formState.allowed_domains),
-                    denied_domains: csvToList(formState.denied_domains),
-                    forbidden_techniques: csvToList(formState.forbidden_techniques),
+                createProgramMutation.mutate(
+                  {
+                    name: formState.name,
+                    owner: formState.owner,
+                    description: formState.description,
+                    scope_policy: {
+                      allowed_domains: csvToList(formState.allowed_domains),
+                      denied_domains: csvToList(formState.denied_domains),
+                      forbidden_techniques: csvToList(formState.forbidden_techniques),
+                    },
                   },
-                });
+                  {
+                    onSuccess: () => {
+                      setFormState({
+                        name: "",
+                        owner: "",
+                        description: "",
+                        allowed_domains: "",
+                        denied_domains: "",
+                        forbidden_techniques: "",
+                      });
+                    },
+                  },
+                );
               }}
             >
               <div className="grid gap-4 md:grid-cols-2">

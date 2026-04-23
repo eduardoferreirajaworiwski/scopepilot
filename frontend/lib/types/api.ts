@@ -4,10 +4,19 @@ export type FindingStatus = "new" | "reported" | "closed";
 export type HypothesisStatus = "draft" | "pending_approval" | "approved" | "rejected" | "executed";
 export type RequiredApprovalLevel = "analyst" | "security_lead";
 
+export type ProgramPolicyLimits = {
+  max_requests_per_minute: number;
+  manual_approval_request_rate: number;
+  max_targets_per_execution: number;
+  manual_approval_techniques: string[];
+};
+
 export type ProgramScopePolicy = {
   allowed_domains: string[];
   denied_domains: string[];
   forbidden_techniques: string[];
+  limits?: ProgramPolicyLimits;
+  notes?: string | null;
 };
 
 export type ProgramRead = {
@@ -199,6 +208,7 @@ export type HypothesisCreateInput = {
 export type ApprovalRequestInput = {
   requested_by: string;
   rationale: string;
+  expires_at?: string | null;
 };
 
 export type ApprovalDecisionInput = {
@@ -211,11 +221,14 @@ export class ApiClientError extends Error {
   status: number;
   detail: string;
   payload: unknown;
+  url?: string;
 
-  constructor(status: number, detail: string, payload: unknown) {
+  constructor(status: number, detail: string, payload: unknown, url?: string) {
     super(detail);
+    this.name = "ApiClientError";
     this.status = status;
     this.detail = detail;
     this.payload = payload;
+    this.url = url;
   }
 }

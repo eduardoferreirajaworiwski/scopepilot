@@ -1,6 +1,5 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { DefinitionList } from "@/components/shared/definition-list";
@@ -15,52 +14,50 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { api, getApiErrorMessage } from "@/lib/api/client";
-import { queryKeys } from "@/lib/api/query-keys";
+import { getApiErrorMessage } from "@/lib/api/client";
 import {
   useAllTargetsQuery,
+  useApproveApprovalMutation,
   useApprovalsQuery,
   useExecutionsQuery,
   useHypothesesQuery,
   usePendingApprovalsQuery,
   useProgramsQuery,
   useQueueSnapshotQuery,
+  useRejectApprovalMutation,
 } from "@/lib/api/hooks";
 import { formatDateTime, formatRelativeCount, humanizeToken } from "@/lib/format";
 import { findHypothesis, findProgram, findTarget, getLatestExecutionForHypothesis } from "@/lib/selectors";
 import type { ApprovalRead } from "@/lib/types/api";
 
-function DecisionForm({ approval }: { approval: ApprovalRead }) {
-  const queryClient = useQueryClient();
+function DecisionForm({
+  approval,
+  onDecisionRecorded,
+}: {
+  approval: ApprovalRead;
+  onDecisionRecorded: (decision: "approved" | "rejected", approvalId: number) => void;
+}) {
   const [formState, setFormState] = useState({
     approver: "",
     approver_role: "analyst" as "analyst" | "security_lead",
     rationale: "",
   });
+  const [lastDecision, setLastDecision] = useState<"approved" | "rejected" | null>(null);
 
-  const approveMutation = useMutation({
-    mutationFn: () => api.approveApproval(approval.id, formState),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.approvals }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.pendingApprovals }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.hypotheses }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.audit }),
-      ]);
-    },
-  });
+  const approveMutation = useApproveApprovalMutation(approval.id);
+  const rejectMutation = useRejectApprovalMutation(approval.id);
+  const isMutating = approveMutation.isPending || rejectMutation.isPending;
+  const isDecisionReady = formState.approver.trim().length > 0 && formState.rationale.trim().length > 0;
 
-  const rejectMutation = useMutation({
-    mutationFn: () => api.rejectApproval(approval.id, formState),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.approvals }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.pendingApprovals }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.hypotheses }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.audit }),
-      ]);
-    },
-  });
+  const resetAfterDecision = (decision: "approved" | "rejected") => {
+    setLastDecision(decision);
+    onDecisionRecorded(decision, approval.id);
+    setFormState({
+      approver: "",
+      approver_role: "analyst",
+      rationale: "",
+    });
+  };
 
   return (
     <div className="decision-panel mt-4 p-4">
@@ -115,19 +112,37 @@ function DecisionForm({ approval }: { approval: ApprovalRead }) {
           {getApiErrorMessage(approveMutation.error ?? rejectMutation.error)}
         </p>
       ) : null}
+      {lastDecision ? (
+        <p className="mt-3 text-sm text-emerald-200">
+          Human decision recorded as {lastDecision}. Approval, hypothesis, audit, and evidence-store caches are refreshing.
+        </p>
+      ) : null}
+      {!isDecisionReady ? (
+        <p className="mt-3 text-sm text-[var(--muted-foreground)]">
+          Reviewer identity and rationale are required before a decision can be submitted.
+        </p>
+      ) : null}
       <div className="mt-4 flex flex-wrap gap-3">
         <Button
           size="sm"
-          disabled={approveMutation.isPending || rejectMutation.isPending}
-          onClick={() => approveMutation.mutate()}
+          disabled={!isDecisionReady || isMutating}
+          onClick={() => {
+            approveMutation.mutate(formState, {
+              onSuccess: () => resetAfterDecision("approved"),
+            });
+          }}
         >
           {approveMutation.isPending ? "Approving..." : "Approve"}
         </Button>
         <Button
           size="sm"
           variant="danger"
-          disabled={approveMutation.isPending || rejectMutation.isPending}
-          onClick={() => rejectMutation.mutate()}
+          disabled={!isDecisionReady || isMutating}
+          onClick={() => {
+            rejectMutation.mutate(formState, {
+              onSuccess: () => resetAfterDecision("rejected"),
+            });
+          }}
         >
           {rejectMutation.isPending ? "Rejecting..." : "Reject"}
         </Button>
@@ -144,6 +159,7 @@ export function ApprovalsPage() {
   const pendingApprovalsQuery = usePendingApprovalsQuery();
   const executionsQuery = useExecutionsQuery();
   const queueQuery = useQueueSnapshotQuery();
+  const [decisionFeedback, setDecisionFeedback] = useState<string | null>(null);
 
   if (
     programsQuery.isPending ||
@@ -183,6 +199,17 @@ export function ApprovalsPage() {
             targetsRegistry.error ??
             queueQuery.error,
         )}
+        onRetry={() => {
+          void Promise.all([
+            programsQuery.refetch(),
+            hypothesesQuery.refetch(),
+            approvalsQuery.refetch(),
+            pendingApprovalsQuery.refetch(),
+            executionsQuery.refetch(),
+            targetsRegistry.refetch(),
+            queueQuery.refetch(),
+          ]);
+        }}
       />
     );
   }
@@ -236,6 +263,12 @@ export function ApprovalsPage() {
         />
       ) : null}
 
+      {decisionFeedback ? (
+        <Card className="border-emerald-400/35 bg-emerald-400/[0.06]">
+          <CardContent className="pt-6 text-sm leading-6 text-emerald-100">{decisionFeedback}</CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid gap-4">
         {pendingApprovals.map((approval) => {
           const hypothesis = findHypothesis(hypotheses, approval.hypothesis_id);
@@ -284,7 +317,14 @@ export function ApprovalsPage() {
                     </div>
                   </div>
                 </div>
-                <DecisionForm approval={approval} />
+                <DecisionForm
+                  approval={approval}
+                  onDecisionRecorded={(decision, approvalId) => {
+                    setDecisionFeedback(
+                      `Approval #${approvalId} recorded as ${decision}. The approval queue, hypothesis state, audit trail, and evidence-store snapshots are refreshing from the API.`,
+                    );
+                  }}
+                />
               </CardContent>
             </Card>
           );
@@ -336,28 +376,35 @@ export function ApprovalsPage() {
             <CardTitle>Latest decisions</CardTitle>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Decision</TableHead>
-                  <TableHead>Approver</TableHead>
-                  <TableHead>Requested by</TableHead>
-                  <TableHead>Decided</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {approvals.slice(0, 8).map((approval) => (
-                  <TableRow key={approval.id}>
-                    <TableCell>
-                      <StatusBadge status={approval.status} />
-                    </TableCell>
-                    <TableCell>{approval.approver ?? "pending"}</TableCell>
-                    <TableCell>{approval.requested_by}</TableCell>
-                    <TableCell>{formatDateTime(approval.decided_at ?? approval.created_at)}</TableCell>
+            {approvals.length === 0 ? (
+              <EmptyState
+                title="No approval records yet"
+                description="Approval requests and human decisions will appear here once hypotheses are submitted for review."
+              />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Decision</TableHead>
+                    <TableHead>Approver</TableHead>
+                    <TableHead>Requested by</TableHead>
+                    <TableHead>Decided</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {approvals.slice(0, 8).map((approval) => (
+                    <TableRow key={approval.id}>
+                      <TableCell>
+                        <StatusBadge status={approval.status} />
+                      </TableCell>
+                      <TableCell>{approval.approver ?? "pending"}</TableCell>
+                      <TableCell>{approval.requested_by}</TableCell>
+                      <TableCell>{formatDateTime(approval.decided_at ?? approval.created_at)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>

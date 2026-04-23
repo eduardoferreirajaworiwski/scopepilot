@@ -11,8 +11,56 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getApiErrorMessage } from "@/lib/api/client";
 import { useAuditTrailQuery } from "@/lib/api/hooks";
 import { formatDateTime, humanizeToken } from "@/lib/format";
+
+function formatMetadataValue(value: unknown) {
+  if (value == null) {
+    return "n/a";
+  }
+
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value.map((item) => String(item)).join(", ") : "empty";
+  }
+
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
+function MetadataCell({ metadata }: { metadata: Record<string, unknown> }) {
+  const entries = Object.entries(metadata);
+
+  if (entries.length === 0) {
+    return <span className="text-xs text-[var(--muted-foreground)]">No metadata</span>;
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex max-w-sm flex-wrap gap-2">
+        {entries.slice(0, 4).map(([key, value]) => (
+          <span
+            key={key}
+            className="rounded-full border border-[var(--border-subtle)] bg-white/[0.04] px-2.5 py-1 text-xs text-[var(--muted-foreground)]"
+            title={formatMetadataValue(value)}
+          >
+            <span className="text-[var(--foreground)]">{humanizeToken(key)}:</span>{" "}
+            {formatMetadataValue(value).slice(0, 48)}
+          </span>
+        ))}
+      </div>
+      <details className="text-xs text-[var(--muted-foreground)]">
+        <summary className="cursor-pointer text-[var(--foreground)]">Raw JSON</summary>
+        <pre className="mt-2 max-w-sm whitespace-pre-wrap break-words leading-6">
+          {JSON.stringify(metadata, null, 2)}
+        </pre>
+      </details>
+    </div>
+  );
+}
 
 export function AuditPage() {
   const auditQuery = useAuditTrailQuery();
@@ -34,7 +82,7 @@ export function AuditPage() {
     return (
       <ErrorState
         title="Audit trail could not be loaded"
-        description={auditQuery.error instanceof Error ? auditQuery.error.message : "Unexpected audit failure."}
+        description={getApiErrorMessage(auditQuery.error)}
         onRetry={() => void auditQuery.refetch()}
       />
     );
@@ -172,9 +220,7 @@ export function AuditPage() {
                     </TableCell>
                     <TableCell className="max-w-md text-[var(--muted-foreground)]">{event.reason}</TableCell>
                     <TableCell className="max-w-sm">
-                      <pre className="whitespace-pre-wrap break-words text-xs leading-6 text-[var(--muted-foreground)]">
-                        {JSON.stringify(event.metadata_json, null, 2)}
-                      </pre>
+                      <MetadataCell metadata={event.metadata_json} />
                     </TableCell>
                     <TableCell>{formatDateTime(event.created_at)}</TableCell>
                   </TableRow>
@@ -187,4 +233,3 @@ export function AuditPage() {
     </div>
   );
 }
-

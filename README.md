@@ -99,17 +99,29 @@ OpenAPI: `http://127.0.0.1:8000/docs`
 
 Observação: o frontend legado estático em `app/frontend/` permanece no backend por compatibilidade durante esta fase. O frontend principal desta etapa está em `frontend/` e consome a API existente via `NEXT_PUBLIC_SCOPEPILOT_API_URL`.
 
+### Integração frontend/API
+- Fluxos integrados sem mock no frontend: listagem de programas, detalhe de programa, listagem de hipóteses, solicitação/aprovação/rejeição de aprovações, listagem de findings e trilha de auditoria.
+- A tela de detalhe de programa usa um adapter temporário no client: ela resolve o programa a partir de `GET /api/programs`, porque o backend ainda não expõe `GET /api/programs/{id}`.
+- O fallback com mock não é usado nesses fluxos prioritários. O mock ainda existente é o adapter seguro/passivo de recon no backend, fora da navegação principal de aprovação e auditoria.
+- Mutations de aprovação invalidam aprovações, hipóteses, evidence store e auditoria para manter separação clara entre IA, decisão humana e execução.
+
 ## Endpoints principais
 - `POST /api/programs`
+- `GET /api/programs`
 - `POST /api/targets`
+- `GET /api/programs/{id}/targets`
 - `POST /api/recon/run`
 - `POST /api/hypotheses`
+- `GET /api/hypotheses`
 - `POST /api/hypotheses/{id}/approvals`
+- `GET /api/approvals`
 - `GET /api/approvals/pending`
 - `POST /api/approvals/{id}/approve`
 - `POST /api/approvals/{id}/reject`
 - `POST /api/approvals/{id}/decide`
 - `POST /api/executions`
+- `GET /api/executions`
+- `GET /api/executions/queue`
 - `POST /api/executions/queue/next`
 - `POST /api/executions/{id}/complete`
 - `GET /api/evidence-store/programs/{id}`

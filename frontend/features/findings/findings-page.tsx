@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/shared/states";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { getApiErrorMessage } from "@/lib/api/client";
 import {
   useAllTargetsQuery,
   useFindingEvidenceStoreQuery,
@@ -43,22 +44,20 @@ export function FindingsPage() {
   }
 
   if (programsQuery.error || findingsQuery.error || hypothesesQuery.error || targetsRegistry.error) {
+    const pageError = programsQuery.error ?? findingsQuery.error ?? hypothesesQuery.error ?? targetsRegistry.error;
+
     return (
       <ErrorState
         title="Findings could not be loaded"
-        description={
-          (programsQuery.error ??
-            findingsQuery.error ??
-            hypothesesQuery.error ??
-            targetsRegistry.error) instanceof Error
-            ? (
-                programsQuery.error ??
-                findingsQuery.error ??
-                hypothesesQuery.error ??
-                targetsRegistry.error
-              )?.message ?? "Unexpected failure."
-            : "Unexpected failure."
-        }
+        description={getApiErrorMessage(pageError)}
+        onRetry={() => {
+          void Promise.all([
+            programsQuery.refetch(),
+            findingsQuery.refetch(),
+            hypothesesQuery.refetch(),
+            targetsRegistry.refetch(),
+          ]);
+        }}
       />
     );
   }
@@ -179,11 +178,8 @@ export function FindingsPage() {
               ) : evidenceStoreQuery.error ? (
                 <ErrorState
                   title="Evidence store could not be loaded"
-                  description={
-                    evidenceStoreQuery.error instanceof Error
-                      ? evidenceStoreQuery.error.message
-                      : "Unexpected evidence store failure."
-                  }
+                  description={getApiErrorMessage(evidenceStoreQuery.error)}
+                  onRetry={() => void evidenceStoreQuery.refetch()}
                 />
               ) : (
                 <>
@@ -251,28 +247,35 @@ export function FindingsPage() {
                       <CardTitle>Audit snapshots for this finding</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Stage</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Actor</TableHead>
-                            <TableHead>Created</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {(selectedStore?.snapshots ?? []).map((snapshot) => (
-                            <TableRow key={snapshot.id}>
-                              <TableCell>
-                                <StatusBadge status={snapshot.stage} />
-                              </TableCell>
-                              <TableCell>{snapshot.snapshot_type}</TableCell>
-                              <TableCell>{snapshot.actor ?? "system"}</TableCell>
-                              <TableCell>{formatDateTime(snapshot.created_at)}</TableCell>
+                      {(selectedStore?.snapshots.length ?? 0) === 0 ? (
+                        <EmptyState
+                          title="No snapshots linked to this finding"
+                          description="The backend returned the finding but no request, response, or decision snapshots for this evidence-store view."
+                        />
+                      ) : (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Stage</TableHead>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Actor</TableHead>
+                              <TableHead>Created</TableHead>
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {(selectedStore?.snapshots ?? []).map((snapshot) => (
+                              <TableRow key={snapshot.id}>
+                                <TableCell>
+                                  <StatusBadge status={snapshot.stage} />
+                                </TableCell>
+                                <TableCell>{snapshot.snapshot_type}</TableCell>
+                                <TableCell>{snapshot.actor ?? "system"}</TableCell>
+                                <TableCell>{formatDateTime(snapshot.created_at)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
                     </CardContent>
                   </Card>
                 </>
