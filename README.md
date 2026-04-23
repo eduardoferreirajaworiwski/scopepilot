@@ -11,8 +11,9 @@ Plataforma de apoio para programas autorizados de bug bounty com fluxo **human-i
 - Aprovação exige revisor humano distinto e compatível com o nível exigido pela hipótese.
 - Execução só pode ser concluída após despacho manual e com evidência registrada.
 
-## Arquitetura (FastAPI + SQLite + Pydantic)
+## Arquitetura (FastAPI + SQLite + Pydantic + Next.js)
 - **Backend**: FastAPI.
+- **Frontend operador**: Next.js App Router + TypeScript + Tailwind CSS + shadcn/ui + React Query.
 - **Persistência**: SQLite + SQLAlchemy.
 - **Contratos**: Pydantic.
 - **Observabilidade**: logging estruturado em JSON.
@@ -66,11 +67,17 @@ app/
   main.py
 docs/
   architecture.md
+frontend/
+  app/
+  components/
+  features/
+  lib/
 README.md
 pyproject.toml
 ```
 
 ## Como executar
+### Backend API
 ```bash
 python -m venv .venv
 source .venv/bin/activate
@@ -78,8 +85,19 @@ pip install -e .
 uvicorn app.main:app --reload
 ```
 
-Interface web: `http://127.0.0.1:8000/`  
+### Frontend operador
+```bash
+cd frontend
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Frontend operador: `http://127.0.0.1:3000`  
+API FastAPI: `http://127.0.0.1:8000`  
 OpenAPI: `http://127.0.0.1:8000/docs`
+
+Observação: o frontend legado estático em `app/frontend/` permanece no backend por compatibilidade durante esta fase. O frontend principal desta etapa está em `frontend/` e consome a API existente via `NEXT_PUBLIC_SCOPEPILOT_API_URL`.
 
 ## Endpoints principais
 - `POST /api/programs`
